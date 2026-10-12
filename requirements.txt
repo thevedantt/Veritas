@@ -1,0 +1,11 @@
+docling
+langchain-qdrant
+qdrant-client[fastembed]
+langchain-google-vertexai
+anthropic[vertex]
+langgraph
+ragas
+langchain-community<0.4  # ragas 0.4 imports langchain_community.chat_models.vertexai, removed in 0.4
+langfuse
+streamlit
+python-dotenv
