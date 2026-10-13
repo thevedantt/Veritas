@@ -63,7 +63,15 @@ Baseline = hybrid retrieve then generate. Agent = the full graph above. Same tes
 same judge. Generator `gemini-3.8-flash`, critic (grade, rewrite, grounding check) `gemini-3.7-flash`, Ragas judge `gemini-2.5-pro`: no model scores its own output.
 
 <!-- scores:start -->
-_Run `python eval.py --baseline` then `python eval.py` to fill this table._
+| Metric | Baseline (retrieve → generate) | Self-correcting agent | Δ |
+|---|---|---|---|
+| faithfulness | 0.806 | 0.752 | -0.054 |
+| answer_relevancy | 0.755 | 0.801 | +0.046 |
+| llm_context_precision_with_reference | 0.773 | 0.939 | +0.166 |
+| context_recall | 1.000 | 0.967 | -0.033 |
+| mean_attempts | 0.000 | 1.000 | +1.000 |
+
+_15 questions from `testset.json`, judged by Ragas._
 <!-- scores:end -->
 
 Metrics: **faithfulness** (answer claims supported by context), **answer_relevancy** (answer addresses the
