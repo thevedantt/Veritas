@@ -13,7 +13,7 @@ from langgraph.graph import END, StateGraph
 
 load_dotenv()
 MAX_ATTEMPTS = int(os.getenv("MAX_ATTEMPTS", 3))
-MIN_RELEVANT = 2
+MIN_RELEVANT = 1  # answers often sit in a single table chunk
 K = 6
 COLLECTION, QDRANT_PATH = "docs", "qdrant_data"
 
@@ -54,6 +54,7 @@ class State(TypedDict, total=False):
     question: str
     query: str
     docs: list[Document]
+    kept: list[Document]  # relevant docs found so far, carried across retries
     answer: str
     attempts: int
     grounded: bool
@@ -122,8 +123,12 @@ def build(max_attempts: int = MAX_ATTEMPTS, vs=None):
         return {"docs": vs.similarity_search(s["query"], k=K)}
 
     def grade(s):
-        keep = parse_indices(ask(GRADE.format(q=s["question"], ctx=fmt(s["docs"]))), len(s["docs"]))
-        return {"docs": [s["docs"][i] for i in keep]}
+        kept = s.get("kept", [])
+        seen = {d.page_content for d in kept}
+        new = [d for d in s["docs"] if d.page_content not in seen]
+        keep = parse_indices(ask(GRADE.format(q=s["question"], ctx=fmt(new))), len(new)) if new else []
+        kept = kept + [new[i] for i in keep]
+        return {"docs": kept, "kept": kept}
 
     def rewrite(s):
         q = ask(REWRITE.format(q=s["question"], prev=s["query"]))

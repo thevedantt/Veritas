@@ -19,7 +19,7 @@ No Docker needed: Qdrant runs as a local folder (`qdrant_data/`), Langfuse uses 
 ## Agent graph
 
 ```
-retrieve ──► grade ──(≥2 relevant)──► generate ──► check ──(grounded)──► END
+retrieve ──► grade ──(≥1 relevant)──► generate ──► check ──(grounded)──► END
    ▲           │                                      │
    │     (too few relevant)                     (not grounded)
    │           ▼                                      │
@@ -27,7 +27,7 @@ retrieve ──► grade ──(≥2 relevant)──► generate ──► check
 ```
 
 - **retrieve**: hybrid search (dense + BM25), k=6.
-- **grade**: LLM keeps only passages useful for the question.
+- **grade**: LLM keeps only passages useful for the question; relevant passages carry over across retries.
 - **rewrite**: LLM rewrites the query (acronyms, synonyms, table/column terms); retried up to `MAX_ATTEMPTS`.
 - **generate**: answers only from context, with `(source p.page)` citations.
 - **check**: LLM verifies every claim is supported; if not, rewrite and try again.
