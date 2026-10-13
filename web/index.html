@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Veritas</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <span class="mark" aria-hidden="true">V</span>
+      <div>
+        <h1>Veritas</h1>
+        <p>Answers checked against your documents</p>
+      </div>
+    </div>
+    <label class="toggle">
+      <input type="checkbox" id="selfCorrect" checked>
+      <span class="track" aria-hidden="true"><span class="thumb"></span></span>
+      <span class="toggle-label">Self-correction</span>
+    </label>
+  </header>
+
+  <main id="thread" aria-live="polite">
+    <section class="empty" id="empty">
+      <h2>Ask about the indexed PDFs</h2>
+      <p>Veritas retrieves with dense + keyword search, grades what it finds, rewrites the query when the
+        context is weak, and checks the answer is grounded before replying.</p>
+      <div class="chips">
+        <button type="button" class="chip">What BLEU score does the big Transformer get on EN-DE?</button>
+        <button type="button" class="chip">What are d_model and d_ff for the base model?</button>
+        <button type="button" class="chip">How long did the big model train, and on what hardware?</button>
+      </div>
+    </section>
+  </main>
+
+  <form class="composer" id="form">
+    <textarea id="question" rows="1" maxlength="2000" placeholder="Ask a question…" aria-label="Question" required></textarea>
+    <button type="submit" id="send">Ask</button>
+  </form>
+
+  <template id="answerTpl">
+    <article class="msg bot">
+      <div class="answer"></div>
+      <div class="meta"></div>
+      <ol class="rewrites" hidden></ol>
+      <details class="sources">
+        <summary></summary>
+        <div class="source-list"></div>
+      </details>
+    </article>
+  </template>
+
+  <script src="app.js"></script>
+</body>
+</html>
