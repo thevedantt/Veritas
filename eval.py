@@ -8,6 +8,7 @@ import json
 import os
 import re
 import sys
+import time
 from pathlib import Path
 
 from ragas import EvaluationDataset, RunConfig, evaluate
@@ -25,7 +26,9 @@ def evaluate_mode(baseline: bool) -> dict:
     tests = json.loads(Path("testset.json").read_text(encoding="utf-8"))
     rows, runs = [], []
     for i, t in enumerate(tests, 1):
+        start = time.perf_counter()
         out = run(graph, t["question"])
+        out["seconds"] = time.perf_counter() - start
         print(f"[{i}/{len(tests)}] attempts={out['attempts']} {t['question'][:70]}")
         runs.append(out)
         rows.append({"user_input": t["question"], "response": out["answer"],
@@ -50,6 +53,9 @@ def evaluate_mode(baseline: bool) -> dict:
     print(df[["user_input", *names]].to_string(max_colwidth=50))
     summary = {n: round(float(df[n].mean()), 3) for n in names}
     summary["mean_attempts"] = round(sum(o["attempts"] for o in runs) / len(runs), 2)
+    summary["mean_seconds"] = round(sum(o["seconds"] for o in runs) / len(runs), 1)
+    costs = [o["usage"]["cost_usd"] for o in runs]
+    summary["mean_cost_usd"] = round(sum(costs) / len(costs), 5) if None not in costs else None
     summary["n"] = len(runs)
     return summary
 
@@ -59,8 +65,11 @@ def readme_table(before: dict, after: dict) -> str:
     for k in after:
         if k == "n":
             continue
-        d = after[k] - before[k]
-        lines.append(f"| {k} | {before[k]:.3f} | {after[k]:.3f} | {d:+.3f} |")
+        a, b = after[k], before.get(k)
+        if None in (a, b):  # metric missing from an older run
+            lines.append(f"| {k} | {'–' if b is None else f'{b:.4g}'} | {'–' if a is None else f'{a:.4g}'} | |")
+        else:
+            lines.append(f"| {k} | {b:.4g} | {a:.4g} | {a - b:+.4g} |")
     lines.append(f"\n_{after['n']} questions from `testset.json`, judged by Ragas._")
     return "\n".join(lines)
 

@@ -1,12 +1,15 @@
 """Serve the web/ frontend and a JSON API over the agent and the document library.
 Run: python server.py -> http://localhost:8000
 
-POST   /api/ask              {"question", "self_correct"} -> answer, sources, rewrites, trace link
+POST   /api/ask              {"question", "self_correct"} -> answer, sources, rewrites, trace link, usage
+POST   /api/ask/stream       same request; server-sent events: steps, answer tokens, then the result
 POST   /api/upload?name=...  raw file bytes -> queued for parsing + indexing in the background
 GET    /api/library          indexed documents + in-progress uploads
 DELETE /api/documents/<id>   remove a document's chunks
 """
+import hashlib
 import json
+import os
 import queue
 import re
 import threading
@@ -16,7 +19,8 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlsplit
 
-from agent import build, flush, run, store, tracing
+from agent import build, flush, run, store, stream, tracing
+from cache import ANSWER_TTL, cache, library_version
 from ingest import SUPPORTED, add, chunk, delete, doc_id, exists, list_documents
 
 MAX_UPLOAD = 50 * 1024 * 1024
@@ -89,6 +93,8 @@ class Handler(SimpleHTTPRequestHandler):
         path = urlsplit(self.path).path
         if path == "/api/ask":
             return self.ask()
+        if path == "/api/ask/stream":
+            return self.ask_stream()
         if path == "/api/upload":
             return self.upload()
         self.send_json(404, {"error": "not found"})
@@ -114,36 +120,107 @@ class Handler(SimpleHTTPRequestHandler):
         QUEUE.put((job, data))
         self.send_json(202, job)
 
-    def ask(self):
+    def read_question(self):
+        """Parse and validate an ask request; returns (question, self_correct) or None after replying."""
         try:
             body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or b"{}")
         except (ValueError, json.JSONDecodeError):
-            return self.send_json(400, {"error": "invalid JSON"})
+            self.send_json(400, {"error": "invalid JSON"})
+            return None
         question = str(body.get("question", "")).strip()
         if not question or len(question) > 2000:
-            return self.send_json(400, {"error": "question is required (max 2000 characters)"})
+            self.send_json(400, {"error": "question is required (max 2000 characters)"})
+            return None
+        return question, bool(body.get("self_correct", True))
+
+    def ask(self):
+        """Blocking JSON answer (scripts, eval tooling). The web app uses /api/ask/stream."""
+        parsed = self.read_question()
+        if not parsed:
+            return
+        key = answer_key(*parsed)
+        if cached := cache.get(key):
+            return self.send_json(200, {**cached, "cached": True})
         try:
-            out = run(GRAPHS[bool(body.get("self_correct", True))], question)
+            out = run(GRAPHS[parsed[1]], parsed[0])
             flush()
         except Exception as e:
             traceback.print_exc()
-            if "429" in str(e) or "timed out" in str(e).lower() or "Timeout" in type(e).__name__:
-                return self.send_json(503, {"error": "the model service is busy (rate limit or timeout); try again in a minute"})
-            return self.send_json(500, {"error": "the agent failed; see server log"})
+            return self.send_json(*failure(e))
+        result = payload(out)
+        remember(key, result)
+        self.send_json(200, result)
 
-        trace_url = None
-        if out["trace_id"] and tracing():
-            from langfuse import get_client
-            trace_url = get_client().get_trace_url(trace_id=out["trace_id"])
-        self.send_json(200, {
-            "answer": out["answer"],
-            "attempts": out["attempts"],
-            "grounded": out.get("grounded"),
-            "queries": out.get("queries", []),
-            "trace_url": trace_url,
-            "sources": [{"source": d.metadata.get("source"), "page": d.metadata.get("page"),
-                         "headings": d.metadata.get("headings"), "text": d.page_content} for d in out["docs"]],
-        })
+    def ask_stream(self):
+        """Server-sent events: step progress, answer tokens as they are written, then the full result."""
+        parsed = self.read_question()
+        if not parsed:
+            return
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream")
+        self.send_header("Cache-Control", "no-cache")
+        self.end_headers()
+
+        def emit(event: dict):
+            self.wfile.write(f"data: {json.dumps(event)}\n\n".encode())
+            self.wfile.flush()
+
+        key = answer_key(*parsed)
+        try:
+            if cached := cache.get(key):
+                return emit({"type": "done", "result": {**cached, "cached": True}})
+            for event in stream(GRAPHS[parsed[1]], parsed[0]):
+                if event["type"] == "done":
+                    flush()
+                    result = payload(event["result"])
+                    remember(key, result)
+                    emit({"type": "done", "result": result})
+                else:
+                    emit(event)
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+            pass  # browser went away mid-answer
+        except Exception as e:
+            traceback.print_exc()
+            try:
+                emit({"type": "error", "error": failure(e)[1]["error"]})
+            except OSError:
+                pass
+
+
+def answer_key(question: str, self_correct: bool) -> str:
+    """Same question (case/spacing/trailing punctuation ignored), same mode, same models, same library."""
+    norm = " ".join(question.lower().split()).rstrip("?.! ")
+    raw = json.dumps([norm, self_correct, os.getenv("LLM_MODEL"), os.getenv("CRITIC_MODEL"), library_version()])
+    return "answer:" + hashlib.sha256(raw.encode()).hexdigest()
+
+
+def remember(key: str, result: dict):
+    if result["grounded"] is not False:  # don't pin an answer the agent itself flagged as unsupported
+        cache.set(key, result, ANSWER_TTL)
+
+
+def failure(e: Exception) -> tuple[int, dict]:
+    if "429" in str(e) or "timed out" in str(e).lower() or "Timeout" in type(e).__name__:
+        return 503, {"error": "the model service is busy (rate limit or timeout); try again in a minute"}
+    return 500, {"error": "the agent failed; see server log"}
+
+
+def payload(out: dict) -> dict:
+    trace_url = None
+    if out.get("trace_id") and tracing():
+        from langfuse import get_client
+        trace_url = get_client().get_trace_url(trace_id=out["trace_id"])
+    return {
+        "answer": out["answer"],
+        "attempts": out["attempts"],
+        "grounded": out.get("grounded"),
+        "queries": out.get("queries", []),
+        "trace_url": trace_url,
+        "usage": {k: v for k, v in out["usage"].items() if k != "by_model"},
+        "cached": False,
+        "sources": [{"source": d.metadata.get("source"), "page": d.metadata.get("page"),
+                     "headings": d.metadata.get("headings"), "text": d.page_content} for d in out["docs"]],
+    }
 
 
 if __name__ == "__main__":
