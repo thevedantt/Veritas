@@ -15,6 +15,7 @@ from langchain_core.documents import Document
 from qdrant_client import models
 
 from agent import COLLECTION, DB_LOCK, QDRANT_PATH, store
+from cache import library_changed
 
 SUPPORTED = {".pdf", ".docx", ".pptx", ".xlsx", ".html", ".htm", ".md", ".csv",
              ".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp", ".webp"}
@@ -62,6 +63,7 @@ def exists(vs, did: str) -> bool:
 def add(vs, docs: list[Document]):
     with DB_LOCK:
         vs.add_documents(docs)
+    library_changed()
 
 
 def delete(vs, did: str) -> bool:
@@ -69,6 +71,7 @@ def delete(vs, did: str) -> bool:
         if not vs.client.count(COLLECTION, count_filter=_of(did), exact=True).count:
             return False
         vs.client.delete(COLLECTION, points_selector=models.FilterSelector(filter=_of(did)))
+    library_changed()
     return True
 
 

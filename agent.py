@@ -3,14 +3,19 @@
 CLI: python agent.py "your question"
 """
 import os
+import hashlib
 import re
 import sys
 import threading
 from typing import TypedDict
 
 from dotenv import load_dotenv
+from langchain_core.callbacks import UsageMetadataCallbackHandler
 from langchain_core.documents import Document
+from langchain_core.embeddings import Embeddings
 from langgraph.graph import END, StateGraph
+
+from cache import EMBED_TTL, cache
 
 load_dotenv()
 MAX_ATTEMPTS = int(os.getenv("MAX_ATTEMPTS", 3))
@@ -19,6 +24,10 @@ K = 6
 # Gemini 3.x on the global endpoint has slow outliers (20-50s for a one-word reply); cap each call and
 # retry, since a retried call is usually fast. The client's own retries skip read timeouts.
 LLM_TIMEOUT, LLM_ATTEMPTS = 45, 3
+# USD per 1M tokens (input, output incl. reasoning), Vertex AI global endpoint, list prices checked 2026-10-14:
+# https://cloud.google.com/vertex-ai/generative-ai/pricing (3.8 Flash is an introductory rate until 2026-12-31).
+# Models not listed report tokens without a cost.
+PRICES = {"gemini-3.8-flash": (0.75, 3.75), "gemini-2.5-flash": (0.30, 2.50), "gemini-2.5-pro": (1.25, 10.00)}
 COLLECTION, QDRANT_PATH = "docs", "qdrant_data"
 # ponytail: one lock around every vector-store call (embedded Qdrant is not thread-safe);
 # switch to a Qdrant server for concurrent reads/writes
@@ -68,7 +77,7 @@ class State(TypedDict, total=False):
     queries: list[str]
 
 
-def llm(model: str | None = None):
+def llm(model: str | None = None, thinking_budget: int | None = None):
     model = model or os.getenv("LLM_MODEL", "gemini-3.8-flash")
     project = os.getenv("GOOGLE_CLOUD_PROJECT")
     if model.startswith("claude"):
@@ -77,15 +86,34 @@ def llm(model: str | None = None):
                                    temperature=0, timeout=LLM_TIMEOUT, max_retries=2)
     from langchain_google_vertexai import ChatVertexAI
     # REST, not gRPC: a gRPC channel used from several server threads can hang forever on a call
+    extra = {} if thinking_budget is None else {"thinking_budget": thinking_budget}
     return ChatVertexAI(model_name=model, project=project, location=os.getenv("GOOGLE_CLOUD_LOCATION", "global"),
-                        temperature=0, api_transport="rest", timeout=LLM_TIMEOUT, max_retries=2)
+                        temperature=0, api_transport="rest", timeout=LLM_TIMEOUT, max_retries=2, **extra)
+
+
+class QueryCachedEmbeddings(Embeddings):
+    """Caches query embeddings (every search and rewrite embeds one); documents pass straight through
+    because uploads are already de-duplicated by content hash."""
+
+    def __init__(self, inner: Embeddings, name: str):
+        self.inner, self.name = inner, name
+
+    def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        return self.inner.embed_documents(texts)
+
+    def embed_query(self, text: str) -> list[float]:
+        key = f"emb:{self.name}:{hashlib.sha256(text.encode()).hexdigest()}"
+        if (vector := cache.get(key)) is None:
+            vector = self.inner.embed_query(text)
+            cache.set(key, vector, EMBED_TTL)
+        return vector
 
 
 def embeddings():
     from langchain_google_vertexai import VertexAIEmbeddings
-    return VertexAIEmbeddings(model_name=os.getenv("EMBED_MODEL", "text-embedding-005"),
-                              project=os.getenv("GOOGLE_CLOUD_PROJECT"),
-                              location=os.getenv("EMBED_LOCATION", "us-central1"))
+    name = os.getenv("EMBED_MODEL", "text-embedding-005")
+    return QueryCachedEmbeddings(VertexAIEmbeddings(model_name=name, project=os.getenv("GOOGLE_CLOUD_PROJECT"),
+                                                    location=os.getenv("EMBED_LOCATION", "us-central1")), name)
 
 
 def sparse_embeddings():
@@ -129,8 +157,10 @@ def text(msg) -> str:
 
 def build(max_attempts: int = MAX_ATTEMPTS, vs=None):
     # generator answers; a different critic model grades, rewrites and checks so no model judges itself
-    model, critic = (llm(m).with_retry(stop_after_attempt=LLM_ATTEMPTS)
-                     for m in (None, os.getenv("CRITIC_MODEL", "gemini-3.7-flash")))
+    # critic calls are short yes/no-style tasks: thinking off by default (thinking tokens bill as output)
+    model = llm().with_retry(stop_after_attempt=LLM_ATTEMPTS)
+    critic = llm(os.getenv("CRITIC_MODEL", "gemini-2.5-flash"),
+                 int(os.getenv("CRITIC_THINKING_BUDGET", 0))).with_retry(stop_after_attempt=LLM_ATTEMPTS)
     vs = vs or store()
     ask = lambda prompt, m=critic: text(m.invoke(prompt)).strip()
 
@@ -181,16 +211,62 @@ def tracing() -> bool:
     return bool(os.getenv("LANGFUSE_PUBLIC_KEY"))
 
 
-def run(graph, question: str) -> State:
-    """Invoke the graph; when Langfuse keys are set every node and LLM call is traced. Adds trace_id."""
-    callbacks = []
+def usage_summary(by_model: dict) -> dict:
+    """Token totals and estimated cost; output counts reasoning tokens, which are billed as output."""
+    tokens_in = tokens_out = 0
+    cost, priced = 0.0, True
+    for name, u in by_model.items():
+        i = u.get("input_tokens", 0)
+        o = u.get("total_tokens", 0) - i
+        tokens_in, tokens_out = tokens_in + i, tokens_out + o
+        if name in PRICES:
+            cost += (i * PRICES[name][0] + o * PRICES[name][1]) / 1e6
+        else:
+            priced = False
+    return {"input_tokens": tokens_in, "output_tokens": tokens_out,
+            "cost_usd": round(cost, 6) if priced else None, "by_model": by_model}
+
+
+STEP_INFO = {
+    "retrieve": lambda u: {"found": len(u.get("docs", []))},
+    "grade": lambda u: {"kept": len(u.get("docs", []))},
+    "rewrite": lambda u: {"query": u.get("query")},
+    "check": lambda u: {"grounded": u.get("grounded")},
+}
+
+
+def stream(graph, question: str):
+    """Run the graph, yielding progress events: {"type": "step", "node", ...}, {"type": "token", "text"}
+    for the answer as it is written, and finally {"type": "done", "result": state}. The result carries
+    trace_id (when Langfuse is configured) and usage (tokens and estimated cost)."""
+    usage = UsageMetadataCallbackHandler()
+    callbacks = [usage]
     if tracing():
         from langfuse.langchain import CallbackHandler
-        callbacks = [CallbackHandler()]
-    out = graph.invoke({"question": question, "query": question, "attempts": 0, "queries": []},
-                       config={"callbacks": callbacks, "run_name": "veritas"})
-    out["trace_id"] = callbacks[0].last_trace_id if callbacks else None
-    return out
+        callbacks.append(CallbackHandler())
+    state: State = {}
+    for mode, chunk in graph.stream({"question": question, "query": question, "attempts": 0, "queries": []},
+                                    config={"callbacks": callbacks, "run_name": "veritas"},
+                                    stream_mode=["values", "updates", "messages"]):
+        if mode == "values":
+            state = chunk
+        elif mode == "messages":
+            msg, meta = chunk
+            if meta.get("langgraph_node") == "generate" and (t := text(msg)):
+                yield {"type": "token", "text": t}
+        else:
+            for node, update in chunk.items():
+                yield {"type": "step", "node": node, **STEP_INFO.get(node, lambda u: {})(update or {})}
+    state["trace_id"] = callbacks[1].last_trace_id if len(callbacks) > 1 else None
+    state["usage"] = usage_summary(usage.usage_metadata)
+    yield {"type": "done", "result": state}
+
+
+def run(graph, question: str) -> State:
+    """Run to completion and return the final state (with trace_id and usage)."""
+    for event in stream(graph, question):
+        if event["type"] == "done":
+            return event["result"]
 
 
 def flush():
@@ -203,4 +279,6 @@ if __name__ == "__main__":
     out = run(build(), " ".join(sys.argv[1:]) or "What BLEU score does the big Transformer get on EN-DE?")
     flush()
     print(out["answer"])
+    u = out["usage"]
     print(f"\nattempts={out['attempts']} grounded={out.get('grounded')} trace={out['trace_id']}")
+    print(f"tokens in={u['input_tokens']} out={u['output_tokens']} cost=${u['cost_usd']}")
