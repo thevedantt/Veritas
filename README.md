@@ -6,13 +6,13 @@ fixed test set.
 
 | Piece | Tool | File |
 |---|---|---|
-| PDF → structured chunks (tables kept intact) | Docling `DocumentConverter` + `HybridChunker` | `ingest.py` |
+| Any document → structured chunks (tables kept intact, OCR for scans) | Docling `DocumentConverter` + `HybridChunker` | `ingest.py` |
 | Dense + sparse retrieval, RRF fusion | Qdrant (embedded) via `langchain-qdrant`, Vertex `text-embedding-005` + BM25 | `ingest.py`, `agent.py` |
 | Agent loop | LangGraph | `agent.py` |
 | LLMs | Gemini (or Claude) on Vertex AI: separate generator, critic and judge models | `agent.py:llm()` |
 | Quality scores | Ragas | `eval.py`, `testset.json` |
 | Tracing | Langfuse | `agent.py:run()` |
-| Chat UI | Streamlit | `app.py` |
+| Web app: upload, library, chat | Python `http.server` + HTML/CSS/JS | `server.py`, `web/` |
 
 No Docker needed: Qdrant runs as a local folder (`qdrant_data/`), Langfuse uses the cloud tier.
 
@@ -46,16 +46,30 @@ copy .env.example .env      # set GOOGLE_CLOUD_PROJECT, models, optional Langfus
 ## Run
 
 ```bash
-python ingest.py data/                       # Docling parse + index (sample: "Attention Is All You Need")
+python server.py                             # web app at http://localhost:8000
+```
+
+Drop files onto the library panel to upload them: PDF, Word, PowerPoint, Excel, HTML, Markdown, CSV and
+images (scans are OCR'd), up to 50 MB each. Each upload is parsed and indexed in the background; the same
+file uploaded twice is detected by content hash and skipped. Remove a document from the library and its
+chunks leave the index. Answers cite the file (and page, when the format has pages).
+
+```bash
+python ingest.py data/                       # add a folder from the command line (already-indexed files skipped)
+python ingest.py --reset data/               # wipe the index and rebuild from the folder (stop the server first)
 python agent.py "What dropout does the big Transformer use?"
-streamlit run app.py                         # chat UI with self-correction toggle, sources, trace links
 python eval.py --baseline                    # before: plain retrieve -> generate
 python eval.py                               # after: self-correcting agent; rewrites the table below
 python test_routing.py                       # routing logic self-check
 ```
 
 With Langfuse keys set, every run is a trace (retrieve, grade, rewrite, generate, check spans plus each LLM
-call), and `eval.py` attaches the Ragas scores to each trace.
+call), and `eval.py` attaches the Ragas scores to each trace. Langfuse US-region accounts use
+`LANGFUSE_HOST=https://us.cloud.langfuse.com`.
+
+**Rate limits:** each question makes 3-9 model calls. Gemini 3.x preview models have low per-minute Vertex
+quotas; when throttled (HTTP 429) each call is capped at 45 s and retried, and the web app says the model is
+busy instead of hanging.
 
 ## Results: before / after
 
