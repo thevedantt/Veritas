@@ -5,6 +5,7 @@ CLI: python agent.py "your question"
 import os
 import re
 import sys
+import threading
 from typing import TypedDict
 
 from dotenv import load_dotenv
@@ -15,7 +16,13 @@ load_dotenv()
 MAX_ATTEMPTS = int(os.getenv("MAX_ATTEMPTS", 3))
 MIN_RELEVANT = 1  # answers often sit in a single table chunk
 K = 6
+# Gemini 3.x on the global endpoint has slow outliers (20-50s for a one-word reply); cap each call and
+# retry, since a retried call is usually fast. The client's own retries skip read timeouts.
+LLM_TIMEOUT, LLM_ATTEMPTS = 45, 3
 COLLECTION, QDRANT_PATH = "docs", "qdrant_data"
+# ponytail: one lock around every vector-store call (embedded Qdrant is not thread-safe);
+# switch to a Qdrant server for concurrent reads/writes
+DB_LOCK = threading.Lock()
 
 GRADE = """Question: {q}
 
@@ -32,7 +39,7 @@ Previous query: {prev}
 Write one better search query: expand acronyms, add likely synonyms, table names or column terms.
 Reply with the query only."""
 
-ANSWER = """Answer the question using only the context. Cite sources as (source p.page) after each claim.
+ANSWER = """Answer the question using only the context. After each claim cite its source using the label in parentheses above the passage, e.g. (report.pdf p.3).
 If the context is insufficient, say so plainly instead of guessing. Write plain text: no LaTeX or math markup.
 
 Context:
@@ -66,11 +73,12 @@ def llm(model: str | None = None):
     project = os.getenv("GOOGLE_CLOUD_PROJECT")
     if model.startswith("claude"):
         from langchain_google_vertexai.model_garden import ChatAnthropicVertex
-        return ChatAnthropicVertex(model_name=model, project=project,
-                                   location=os.getenv("CLAUDE_LOCATION", "us-east5"), temperature=0)
+        return ChatAnthropicVertex(model_name=model, project=project, location=os.getenv("CLAUDE_LOCATION", "us-east5"),
+                                   temperature=0, timeout=LLM_TIMEOUT, max_retries=2)
     from langchain_google_vertexai import ChatVertexAI
-    return ChatVertexAI(model_name=model, project=project,
-                        location=os.getenv("GOOGLE_CLOUD_LOCATION", "global"), temperature=0)
+    # REST, not gRPC: a gRPC channel used from several server threads can hang forever on a call
+    return ChatVertexAI(model_name=model, project=project, location=os.getenv("GOOGLE_CLOUD_LOCATION", "global"),
+                        temperature=0, api_transport="rest", timeout=LLM_TIMEOUT, max_retries=2)
 
 
 def embeddings():
@@ -86,15 +94,20 @@ def sparse_embeddings():
 
 
 def store():
+    """Open the hybrid collection, creating it if missing."""
     from langchain_qdrant import QdrantVectorStore, RetrievalMode
-    return QdrantVectorStore.from_existing_collection(
+    return QdrantVectorStore.construct_instance(
         embedding=embeddings(), sparse_embedding=sparse_embeddings(), retrieval_mode=RetrievalMode.HYBRID,
-        collection_name=COLLECTION, path=QDRANT_PATH)
+        collection_name=COLLECTION, client_options={"path": QDRANT_PATH})
+
+
+def label(d: Document) -> str:
+    page = d.metadata.get("page")
+    return f"{d.metadata.get('source')} p.{page}" if page else str(d.metadata.get("source"))
 
 
 def fmt(docs: list[Document]) -> str:
-    return "\n\n".join(f"[{i}] ({d.metadata.get('source')} p.{d.metadata.get('page')})\n{d.page_content}"
-                       for i, d in enumerate(docs))
+    return "\n\n".join(f"[{i}] ({label(d)})\n{d.page_content}" for i, d in enumerate(docs))
 
 
 def parse_indices(text: str, n: int) -> list[int]:
@@ -116,11 +129,14 @@ def text(msg) -> str:
 
 def build(max_attempts: int = MAX_ATTEMPTS, vs=None):
     # generator answers; a different critic model grades, rewrites and checks so no model judges itself
-    model, critic, vs = llm(), llm(os.getenv("CRITIC_MODEL", "gemini-3.7-flash")), vs or store()
+    model, critic = (llm(m).with_retry(stop_after_attempt=LLM_ATTEMPTS)
+                     for m in (None, os.getenv("CRITIC_MODEL", "gemini-3.7-flash")))
+    vs = vs or store()
     ask = lambda prompt, m=critic: text(m.invoke(prompt)).strip()
 
     def retrieve(s):
-        return {"docs": vs.similarity_search(s["query"], k=K)}
+        with DB_LOCK:
+            return {"docs": vs.similarity_search(s["query"], k=K)}
 
     def grade(s):
         kept = s.get("kept", [])
