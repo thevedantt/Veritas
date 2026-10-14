@@ -65,11 +65,11 @@ same judge. Generator `gemini-3.8-flash`, critic (grade, rewrite, grounding chec
 <!-- scores:start -->
 | Metric | Baseline (retrieve → generate) | Self-correcting agent | Δ |
 |---|---|---|---|
-| faithfulness | 0.806 | 0.752 | -0.054 |
-| answer_relevancy | 0.755 | 0.801 | +0.046 |
-| llm_context_precision_with_reference | 0.773 | 0.939 | +0.166 |
-| context_recall | 1.000 | 0.967 | -0.033 |
-| mean_attempts | 0.000 | 1.000 | +1.000 |
+| faithfulness | 0.845 | 0.869 | +0.024 |
+| answer_relevancy | 0.792 | 0.811 | +0.019 |
+| llm_context_precision_with_reference | 0.801 | 0.939 | +0.138 |
+| context_recall | 1.000 | 0.933 | -0.067 |
+| mean_attempts | 0.000 | 0.000 | +0.000 |
 
 _15 questions from `testset.json`, judged by Ragas._
 <!-- scores:end -->

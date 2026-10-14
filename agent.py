@@ -33,7 +33,7 @@ Write one better search query: expand acronyms, add likely synonyms, table names
 Reply with the query only."""
 
 ANSWER = """Answer the question using only the context. Cite sources as (source p.page) after each claim.
-If the context is insufficient, say so plainly instead of guessing.
+If the context is insufficient, say so plainly instead of guessing. Write plain text: no LaTeX or math markup.
 
 Context:
 {ctx}
