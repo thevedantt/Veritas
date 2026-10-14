@@ -15,30 +15,48 @@
         <p>Answers checked against your documents</p>
       </div>
     </div>
-    <label class="toggle">
-      <input type="checkbox" id="selfCorrect" checked>
-      <span class="track" aria-hidden="true"><span class="thumb"></span></span>
-      <span class="toggle-label">Self-correction</span>
-    </label>
+    <div class="top-actions">
+      <label class="toggle">
+        <input type="checkbox" id="selfCorrect" checked>
+        <span class="track" aria-hidden="true"><span class="thumb"></span></span>
+        <span class="toggle-label">Self-correction</span>
+      </label>
+      <button type="button" class="library-btn" id="libraryBtn" aria-controls="library" aria-expanded="false">
+        Library <span id="docCount" class="count">0</span>
+      </button>
+    </div>
   </header>
 
-  <main id="thread" aria-live="polite">
-    <section class="empty" id="empty">
-      <h2>Ask about the indexed PDFs</h2>
-      <p>Veritas retrieves with dense + keyword search, grades what it finds, rewrites the query when the
-        context is weak, and checks the answer is grounded before replying.</p>
-      <div class="chips">
-        <button type="button" class="chip">What BLEU score does the big Transformer get on EN-DE?</button>
-        <button type="button" class="chip">What are d_model and d_ff for the base model?</button>
-        <button type="button" class="chip">How long did the big model train, and on what hardware?</button>
-      </div>
-    </section>
-  </main>
+  <div class="layout">
+    <aside class="library" id="library" aria-label="Document library">
+      <label class="drop" id="drop">
+        <input type="file" id="fileInput" multiple
+          accept=".pdf,.docx,.pptx,.xlsx,.html,.htm,.md,.csv,.png,.jpg,.jpeg,.tif,.tiff,.bmp,.webp">
+        <strong>Drop files or click to upload</strong>
+        <span>PDF, Word, PowerPoint, Excel, HTML, Markdown, CSV, images · max 50 MB</span>
+      </label>
+      <ul class="jobs" id="jobs"></ul>
+      <h2 class="lib-title">Documents</h2>
+      <ul class="docs" id="docs"></ul>
+      <p class="lib-empty" id="libEmpty">No documents yet.</p>
+    </aside>
 
-  <form class="composer" id="form">
-    <textarea id="question" rows="1" maxlength="2000" placeholder="Ask a question…" aria-label="Question" required></textarea>
-    <button type="submit" id="send">Ask</button>
-  </form>
+    <section class="chat">
+      <main id="thread" aria-live="polite">
+        <section class="empty" id="empty">
+          <h2 id="emptyTitle">Upload a document to start</h2>
+          <p id="emptyText">Add PDFs, Word files, slides, spreadsheets or scans. Veritas parses tables and
+            layout, then answers with citations, rewriting its search and checking every answer against the
+            source before replying.</p>
+        </section>
+      </main>
+
+      <form class="composer" id="form">
+        <textarea id="question" rows="1" maxlength="2000" placeholder="Upload a document first" aria-label="Question" required disabled></textarea>
+        <button type="submit" id="send" disabled>Ask</button>
+      </form>
+    </section>
+  </div>
 
   <template id="answerTpl">
     <article class="msg bot">
