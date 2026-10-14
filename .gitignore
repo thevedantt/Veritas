@@ -3,3 +3,4 @@
 qdrant_data/
 __pycache__/
 *.log
+uploads/
