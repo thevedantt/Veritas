@@ -74,16 +74,16 @@ busy instead of hanging.
 ## Results: before / after
 
 Baseline = hybrid retrieve then generate. Agent = the full graph above. Same test set, same models,
-same judge. Generator `gemini-3.8-flash`, critic (grade, rewrite, grounding check) `gemini-3.7-flash`, Ragas judge `gemini-2.5-pro`: no model scores its own output.
+same judge. Generator `gemini-3.8-flash`, critic (grade, rewrite, grounding check) `gemini-2.5-flash` with thinking off, Ragas judge `gemini-2.5-pro`: no model scores its own output.
 
 <!-- scores:start -->
 | Metric | Baseline (retrieve → generate) | Self-correcting agent | Δ |
 |---|---|---|---|
-| faithfulness | 0.845 | 0.869 | +0.024 |
-| answer_relevancy | 0.792 | 0.811 | +0.019 |
+| faithfulness | 0.767 | 0.869 | +0.102 |
+| answer_relevancy | 0.791 | 0.811 | +0.02 |
 | llm_context_precision_with_reference | 0.801 | 0.939 | +0.138 |
-| context_recall | 1.000 | 0.933 | -0.067 |
-| mean_attempts | 0.000 | 0.000 | +0.000 |
+| context_recall | 1 | 0.933 | -0.067 |
+| mean_attempts | 0 | 0 | +0 |
 
 _15 questions from `testset.json`, judged by Ragas._
 <!-- scores:end -->
