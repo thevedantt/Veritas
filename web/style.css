@@ -318,3 +318,6 @@ main {
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
 }
+
+/* answer being written live; replaced by the final card once the grounding check finishes */
+.draft { border-style: dashed; }

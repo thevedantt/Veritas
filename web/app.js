@@ -168,6 +168,15 @@ function renderAnswer(data) {
     meta.append(el("span", `badge ${data.grounded ? "good" : "warn"}`, data.grounded ? "Grounded" : "Not fully grounded"));
   }
   meta.append(el("span", "badge", data.attempts ? `${data.attempts} rewrite${data.attempts > 1 ? "s" : ""}` : "No rewrites"));
+  if (data.cached) meta.append(el("span", "badge good", "Cached · no model calls"));
+  const u = data.usage;
+  if (u && !data.cached) {
+    const tokens = (u.input_tokens + u.output_tokens).toLocaleString();
+    const cost = u.cost_usd == null ? "" : ` · $${u.cost_usd < 0.01 ? u.cost_usd.toFixed(4) : u.cost_usd.toFixed(3)}`;
+    const badge = el("span", "badge", `${tokens} tokens${cost}`);
+    badge.title = `${u.input_tokens.toLocaleString()} input + ${u.output_tokens.toLocaleString()} output (incl. reasoning); estimated from list prices`;
+    meta.append(badge);
+  }
   if (data.trace_url) {
     const badge = el("span", "badge");
     const link = el("a", null, "Langfuse trace ↗");
@@ -202,25 +211,74 @@ function renderAnswer(data) {
   return msg;
 }
 
+const STEP_TEXT = {
+  retrieve: e => `Searched the library: ${e.found} passage${e.found === 1 ? "" : "s"}`,
+  grade: e => `Kept ${e.kept} relevant passage${e.kept === 1 ? "" : "s"}`,
+  rewrite: e => `Rewrote the search: “${e.query}”`,
+  generate: () => "Checking the answer against the sources…",
+  check: e => (e.grounded ? "Answer is supported by the sources" : "Answer not fully supported, searching again…"),
+};
+
+// Read server-sent events from a fetch response body ("data: {...}" blocks separated by blank lines).
+async function* events(res) {
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let cut;
+    while ((cut = buffer.indexOf("\n\n")) >= 0) {
+      const block = buffer.slice(0, cut);
+      buffer = buffer.slice(cut + 2);
+      if (block.startsWith("data: ")) yield JSON.parse(block.slice(6));
+    }
+  }
+}
+
 async function ask(question) {
   if (busy || !docCount) return;
   busy = true;
   updateComposer();
   $("empty")?.remove();
   thread.append(el("div", "msg user", question));
-  const thinking = addThinking(selfCorrect.checked);
+  const live = addThinking(selfCorrect.checked);
+  const status = live.lastChild;
+  let answer = null;
   scrollDown();
   try {
-    const res = await fetch("/api/ask", {
+    const res = await fetch("/api/ask/stream", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ question, self_correct: selfCorrect.checked }),
     });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
-    thinking.replaceWith(renderAnswer(data));
+    if (!res.ok) throw new Error((await res.json()).error || `HTTP ${res.status}`);
+    let finished = false;
+    for await (const e of events(res)) {
+      if (e.type === "step") {
+        status.textContent = STEP_TEXT[e.node]?.(e) ?? status.textContent;
+        if (e.node === "rewrite" && answer) { answer.remove(); answer = null; } // drop an unsupported draft
+      } else if (e.type === "token") {
+        if (!answer) {
+          answer = el("article", "msg bot answer draft");
+          live.after(answer);
+          status.textContent = "Writing the answer…";
+        }
+        answer.textContent += e.text;
+        scrollDown();
+      } else if (e.type === "done") {
+        answer?.remove();
+        live.replaceWith(renderAnswer(e.result));
+        finished = true;
+      } else if (e.type === "error") {
+        throw new Error(e.error);
+      }
+    }
+    if (!finished) throw new Error("the connection closed before the answer finished");
   } catch (err) {
-    thinking.replaceWith(el("article", "msg bot error", `Something went wrong: ${err.message}`));
+    answer?.remove();
+    live.replaceWith(el("article", "msg bot error", `Something went wrong: ${err.message}`));
   } finally {
     busy = false;
     updateComposer();
