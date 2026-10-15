@@ -79,15 +79,15 @@ same judge. Generator `gemini-3.8-flash`, critic (grade, rewrite, grounding chec
 <!-- scores:start -->
 | Metric | Baseline (retrieve → generate) | Self-correcting agent | Δ |
 |---|---|---|---|
-| faithfulness | 0.767 | 0.726 | -0.041 |
-| answer_relevancy | 0.791 | 0.803 | +0.012 |
-| llm_context_precision_with_reference | 0.801 | 0.939 | +0.138 |
-| context_recall | 1 | 0.967 | -0.033 |
+| faithfulness | 0.781 | 0.726 | -0.055 |
+| answer_relevancy | 0.647 | 0.803 | +0.156 |
+| llm_context_precision_with_reference | 0.678 | 0.939 | +0.261 |
+| context_recall | 0.867 | 0.967 | +0.1 |
 | mean_attempts | 0 | 0 | +0 |
-| mean_seconds | 9 | 15.9 | +6.9 |
-| mean_cost_usd | 0.00225 | 0.0025 | +0.00025 |
+| mean_seconds | 7.6 | 15.9 | +8.3 |
+| mean_cost_usd | 0.00286 | 0.0025 | -0.00036 |
 
-_15 questions from `testset.json`, judged by Ragas._
+_15 questions from `testset.json` (direct, vague, messy scanned tables, unanswerable), judged by Ragas; unanswerable questions are scored on abstention instead._
 <!-- scores:end -->
 
 Metrics: **faithfulness** (answer claims supported by context), **answer_relevancy** (answer addresses the

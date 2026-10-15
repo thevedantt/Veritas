@@ -1,10 +1,18 @@
 {
-  "faithfulness": 0.767,
-  "answer_relevancy": 0.791,
-  "llm_context_precision_with_reference": 0.801,
-  "context_recall": 1.0,
+  "faithfulness": 0.781,
+  "answer_relevancy": 0.647,
+  "llm_context_precision_with_reference": 0.678,
+  "context_recall": 0.867,
+  "faithfulness [direct]": 0.786,
+  "context_recall [direct]": 1.0,
+  "faithfulness [vague]": 0.825,
+  "context_recall [vague]": 1.0,
+  "faithfulness [messy]": 0.75,
+  "context_recall [messy]": 0.6,
+  "abstention_rate [unanswerable]": 1.0,
+  "rewrite_rate": 0.0,
   "mean_attempts": 0.0,
-  "mean_seconds": 9.0,
-  "mean_cost_usd": 0.00225,
-  "n": 15
+  "mean_seconds": 7.6,
+  "mean_cost_usd": 0.00286,
+  "n": 33
 }

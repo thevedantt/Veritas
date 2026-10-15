@@ -35,9 +35,17 @@ def evaluate_mode(baseline: bool) -> dict:
     tests = json.loads(Path("testset.json").read_text(encoding="utf-8"))
     runs = []
     for i, t in enumerate(tests, 1):
-        start = time.perf_counter()
-        out = run(graph, t["question"])
-        out["seconds"] = time.perf_counter() - start
+        for attempt in range(3):  # a throttled run (Vertex 429) waits and retries instead of killing the eval
+            try:
+                start = time.perf_counter()
+                out = run(graph, t["question"])
+                out["seconds"] = time.perf_counter() - start
+                break
+            except Exception as e:
+                if attempt == 2:
+                    raise
+                print(f"  run failed ({type(e).__name__}: {str(e)[:80]}); retrying in 60s")
+                time.sleep(60)
         out["type"] = t.get("type", "direct")
         print(f"[{i}/{len(tests)}] {out['type']:<12} attempts={out['attempts']} {t['question'][:60]}")
         runs.append(out)

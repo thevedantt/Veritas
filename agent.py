@@ -7,6 +7,7 @@ import hashlib
 import re
 import sys
 import threading
+import time
 from typing import TypedDict
 
 from dotenv import load_dotenv
@@ -91,20 +92,31 @@ def llm(model: str | None = None, thinking_budget: int | None = None):
                                   temperature=0, timeout=LLM_TIMEOUT, max_retries=2, **extra)
 
 
+def with_backoff(fn, *args, attempts: int = 4):
+    """Retry rate-limit (429) and transient errors with exponential backoff: 2s, 4s, 8s."""
+    for i in range(attempts):
+        try:
+            return fn(*args)
+        except Exception as e:
+            if i == attempts - 1 or not any(m in str(e) for m in ("429", "RESOURCE_EXHAUSTED", "503", "timed out")):
+                raise
+            time.sleep(2 ** (i + 1))
+
+
 class QueryCachedEmbeddings(Embeddings):
     """Caches query embeddings (every search and rewrite embeds one); documents pass straight through
-    because uploads are already de-duplicated by content hash."""
+    because uploads are already de-duplicated by content hash. Both retry on rate limits."""
 
     def __init__(self, inner: Embeddings, name: str):
         self.inner, self.name = inner, name
 
     def embed_documents(self, texts: list[str]) -> list[list[float]]:
-        return self.inner.embed_documents(texts)
+        return with_backoff(self.inner.embed_documents, texts)
 
     def embed_query(self, text: str) -> list[float]:
         key = f"emb:{self.name}:{hashlib.sha256(text.encode()).hexdigest()}"
         if (vector := cache.get(key)) is None:
-            vector = self.inner.embed_query(text)
+            vector = with_backoff(self.inner.embed_query, text)
             cache.set(key, vector, EMBED_TTL)
         return vector
 
