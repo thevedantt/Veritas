@@ -8,6 +8,7 @@ import sys
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
+from itertools import zip_longest
 from typing import TypedDict
 
 from dotenv import load_dotenv
@@ -20,20 +21,30 @@ from qdrant_client import models
 from cache import EMBED_TTL, cache
 
 load_dotenv()
-MAX_ATTEMPTS = int(os.getenv("MAX_ATTEMPTS", 3))
+# retry rounds; each round searches several rewritten queries in parallel, so 2 rounds cover what 3+ sequential
+# single-query retries did, at about half the wall time
+MAX_ATTEMPTS = int(os.getenv("MAX_ATTEMPTS", 2))
+N_VARIANTS = 3
 # retrieve K_FETCH candidates by hybrid search, keep the K_KEEP best after reranking (fewer, better passages
 # also make generation faster and cheaper); the baseline keeps plain hybrid top-K_BASELINE
 K_FETCH, K_KEEP, K_BASELINE = 10, 5, 6
 RERANKER = os.getenv("RERANKER", "jinaai/jina-reranker-v1-turbo-en")  # "off" disables; 8K context for long tables
 NOT_FOUND_MARK = "NOT_FOUND"
 NOT_FOUND = "I couldn't find this in the documents."
+MISSING_MARK = "MISSING:"  # last line of a partial answer: a search query for the part the passages lack
+K_EXTRA = 2  # passages added per targeted search for a missing part (on top of the ones already kept)
 # Gemini 3.x on the global endpoint has slow outliers (20-50s for a one-word reply); cap each call and
 # retry, since a retried call is usually fast. The client's own retries skip read timeouts.
 LLM_TIMEOUT, LLM_ATTEMPTS = 45, 3
+# the generator gets one short try; if it stalls, FALLBACK_MODEL answers instead of waiting out retries
+PRIMARY_TIMEOUT = int(os.getenv("PRIMARY_TIMEOUT", 15))
+PRIMARY_COOLDOWN = 120  # seconds to skip a failed primary before trying it again
+_primary_down_until = [0.0]  # shared by every graph in the process
 # USD per 1M tokens (input, output incl. reasoning), Vertex AI global endpoint, list prices checked 2026-10-14:
 # https://cloud.google.com/vertex-ai/generative-ai/pricing (3.8 Flash is an introductory rate until 2026-12-31).
 # Models not listed report tokens without a cost.
-PRICES = {"gemini-3.8-flash": (0.75, 3.75), "gemini-2.5-flash": (0.30, 2.50), "gemini-2.5-pro": (1.25, 10.00)}
+PRICES = {"gemini-3.8-flash": (0.75, 3.75), "gemini-2.5-flash": (0.30, 2.50), "gemini-2.5-flash-lite": (0.10, 0.40),
+          "gemini-2.5-pro": (1.25, 10.00)}
 COLLECTION, QDRANT_PATH = "docs", "qdrant_data"
 # ponytail: one lock around every vector-store call (embedded Qdrant is not thread-safe);
 # switch to a Qdrant server for concurrent reads/writes
@@ -41,14 +52,18 @@ DB_LOCK = threading.Lock()
 
 REWRITE = """The search query below did not retrieve enough relevant passages from a document collection.
 Original question: {q}
-Previous query: {prev}
+Previous queries: {prev}
 
-Write one better search query: expand acronyms, add likely synonyms, table names or column terms.
-Reply with the query only."""
+Write 3 different search queries that could find the answer: expand acronyms, add likely synonyms, table or
+column names, or the specific terms a document would use. One query per line, no numbering, nothing else."""
 
 ANSWER = """Answer the question using only the context. After each claim cite its source using the label in parentheses above the passage, e.g. (report.pdf p.3).
-If the context contains part of the answer, give that part and say what is missing. If it contains nothing
-that answers the question, reply with exactly NOT_FOUND and nothing else. Write plain text: no LaTeX or math markup.
+If the context contains part of the answer, give that part and say what is missing, then end with one line
+"MISSING: <short search query for the missing part>". If it contains nothing that answers the question,
+reply with exactly NOT_FOUND and nothing else. Write plain text: no LaTeX or math markup.
+For a table lookup, use the table and column group the question names, find the row whose range contains
+the value (at least <= value < but less than), and give every value from that row the answer needs (e.g. a
+base amount plus a percentage of the excess over a threshold).
 
 Context:
 {ctx}
@@ -71,25 +86,28 @@ class State(TypedDict, total=False):
     docs: list[Document]
     kept: list[Document]  # best docs found so far, carried across retries and re-ranked with new results
     found: int
+    variants: list[str]  # rewritten queries searched in parallel on the next retrieve
     insufficient: bool
+    missing: str | None  # search query for the part of the answer the passages lacked
     answer: str
     attempts: int
     grounded: bool
     queries: list[str]
 
 
-def llm(model: str | None = None, thinking_budget: int | None = None):
-    model = model or os.getenv("LLM_MODEL", "gemini-3.8-flash")
+def llm(model: str | None = None, thinking_budget: int | None = None, timeout: int = LLM_TIMEOUT,
+        retries: int = 2):
+    model = model or os.getenv("LLM_MODEL", "gemini-2.5-flash")
     project = os.getenv("GOOGLE_CLOUD_PROJECT")
     if model.startswith("claude"):
         from langchain_google_vertexai.model_garden import ChatAnthropicVertex
         return ChatAnthropicVertex(model_name=model, project=project, location=os.getenv("CLAUDE_LOCATION", "us-east5"),
-                                   temperature=0, timeout=LLM_TIMEOUT, max_retries=2)
+                                   temperature=0, timeout=timeout, max_retries=retries)
     from langchain_google_genai import ChatGoogleGenerativeAI  # replaces deprecated ChatVertexAI (HTTP, no gRPC)
     extra = {} if thinking_budget is None else {"thinking_budget": thinking_budget}
     return ChatGoogleGenerativeAI(model=model, vertexai=True, project=project,
                                   location=os.getenv("GOOGLE_CLOUD_LOCATION", "global"),
-                                  temperature=0, timeout=LLM_TIMEOUT, max_retries=2, **extra)
+                                  temperature=0, timeout=timeout, max_retries=retries, **extra)
 
 
 def with_backoff(fn, *args, attempts: int = 4):
@@ -151,7 +169,8 @@ def fmt(docs: list[Document]) -> str:
     return "\n\n".join(f"[{i}] ({label(d)})\n{d.page_content}" for i, d in enumerate(docs))
 
 
-_executor = ThreadPoolExecutor(8)
+_executor = ThreadPoolExecutor(8)       # query embeddings
+_search_pool = ThreadPoolExecutor(4)    # parallel searches; separate pool so nested embedding jobs can't deadlock
 _reranker, _reranker_lock = None, threading.Lock()
 
 
@@ -181,7 +200,13 @@ def rerank(question: str, docs: list[Document], keep: int) -> list[Document]:
             from fastembed.rerank.cross_encoder import TextCrossEncoder
             _reranker = TextCrossEncoder(RERANKER)
     scores = list(_reranker.rerank(question, [d.page_content for d in docs]))
-    return [docs[i] for i in sorted(range(len(docs)), key=lambda i: -scores[i])[:keep]]
+    # Fuse with the incoming (hybrid search) order: the small cross-encoder misjudges vague paraphrases
+    # ("where each word sits" vs "positional encoding") and alone dropped hybrid's top hit
+    by_score = sorted(range(len(docs)), key=lambda i: -scores[i])
+    fused = {i: 1 / (60 + i) for i in range(len(docs))}
+    for rank, i in enumerate(by_score):
+        fused[i] += 1 / (60 + rank)
+    return [docs[i] for i in sorted(fused, key=lambda i: -fused[i])[:keep]]
 
 
 def could_be_marker(pending: str) -> bool:
@@ -189,9 +214,26 @@ def could_be_marker(pending: str) -> bool:
     return NOT_FOUND_MARK.startswith(pending.lstrip()[:len(NOT_FOUND_MARK)])
 
 
+def split_missing(answer: str) -> tuple[str, str | None]:
+    """Separate a partial answer's trailing "MISSING: <query>" line from the answer text."""
+    head, _, last = answer.rstrip().rpartition("\n")
+    if last.strip().startswith(MISSING_MARK):
+        return head.rstrip(), last.strip()[len(MISSING_MARK):].strip() or None
+    return answer, None
+
+
+def held_tail(text: str) -> int:
+    """Index from which streamed text is held back: a final line that is or could become the MISSING line."""
+    start = text.rfind("\n") + 1
+    line = text[start:].lstrip()
+    return start - 1 if start and (line.startswith(MISSING_MARK) or MISSING_MARK.startswith(line)) else len(text)
+
+
 def after_generate(s: State, max_attempts: int) -> str:
     if s.get("insufficient"):
         return "rewrite" if s["attempts"] < max_attempts else END  # "not found" makes no claims to check
+    if s.get("missing") and s["attempts"] < max_attempts:
+        return "rewrite"  # partial answer: search for the missing part, keep what was found
     return "check"
 
 
@@ -205,11 +247,31 @@ def text(msg) -> str:
 
 
 def build(max_attempts: int = MAX_ATTEMPTS, vs=None):
-    # generator answers; a different critic model grades, rewrites and checks so no model judges itself
+    # generator answers; a different critic model rewrites and checks so no model judges itself
     # critic calls are short yes/no-style tasks: thinking off by default (thinking tokens bill as output)
     # generator thinking off by default too: reasoning tokens delay the first word by seconds
-    model = llm(None, int(os.getenv("GENERATOR_THINKING_BUDGET", 0))).with_retry(stop_after_attempt=LLM_ATTEMPTS)
-    critic = llm(os.getenv("CRITIC_MODEL", "gemini-2.5-flash"),
+    think = int(os.getenv("GENERATOR_THINKING_BUDGET", 0))
+    model = llm(None, think).with_retry(stop_after_attempt=LLM_ATTEMPTS)
+    fallback = os.getenv("FALLBACK_MODEL")
+    primary = llm(None, think, PRIMARY_TIMEOUT, retries=0) if fallback else None
+    backup = llm(fallback, think).with_retry(stop_after_attempt=LLM_ATTEMPTS) if fallback else None
+
+    def write(prompt):
+        """Generator call. With a fallback: one short try on the primary, unless it failed in the last
+        PRIMARY_COOLDOWN seconds (then the fallback answers straight away, so an outage costs one timeout)."""
+        if not fallback:
+            return text(model.invoke(prompt)).strip()
+        if time.monotonic() >= _primary_down_until[0]:
+            try:
+                return text(primary.invoke(prompt)).strip()
+            except Exception as e:
+                # ponytail: a stall mid-answer restarts on the fallback, so a streamed draft can repeat its
+                # opening; the final answer is clean
+                print(f"primary model failed ({type(e).__name__}); fallback for {PRIMARY_COOLDOWN}s", file=sys.stderr)
+                _primary_down_until[0] = time.monotonic() + PRIMARY_COOLDOWN
+        return text(backup.invoke(prompt)).strip()
+
+    critic = llm(os.getenv("CRITIC_MODEL", "gemini-2.5-flash-lite"),
                  int(os.getenv("CRITIC_THINKING_BUDGET", 0))).with_retry(stop_after_attempt=LLM_ATTEMPTS)
     vs = vs or store()
     ask = lambda prompt, m=critic: text(m.invoke(prompt)).strip()
@@ -217,22 +279,37 @@ def build(max_attempts: int = MAX_ATTEMPTS, vs=None):
     def retrieve(s):
         if max_attempts == 0:  # baseline: plain hybrid search, no reranking
             return {"docs": hybrid_search(vs, s["query"], K_BASELINE)}
-        found = hybrid_search(vs, s["query"], K_FETCH)
+        queries = s.get("variants") or [s["query"]]
+        batches = _search_pool.map(lambda q: hybrid_search(vs, q, K_FETCH), queries)
+        # interleave so the list order is a rank across queries (rerank fuses with it); dedupe keeps first position
+        found = [d for row in zip_longest(*batches) for d in row if d]
+        found = list({d.page_content: d for d in found}.values())
         kept = s.get("kept", [])
         seen = {d.page_content for d in kept}
-        docs = rerank(s["question"], kept + [d for d in found if d.page_content not in seen], K_KEEP)
+        new = [d for d in found if d.page_content not in seen]
+        if s.get("missing"):  # targeted search: add its best hits to what was kept, don't let rerank drop them
+            docs = kept + new[:K_EXTRA]
+        else:
+            docs = rerank(s["question"], kept + new, K_KEEP)
         return {"docs": docs, "kept": docs, "found": len(found)}
 
     def rewrite(s):
-        q = ask(REWRITE.format(q=s["question"], prev=s["query"]))
-        print(f"rewrite #{s['attempts'] + 1}: {q}", file=sys.stderr)
-        return {"query": q, "attempts": s["attempts"] + 1, "queries": s.get("queries", []) + [q]}
+        if s.get("missing"):  # the generator already named what to search for
+            print(f"search for missing part #{s['attempts'] + 1}: {s['missing']}", file=sys.stderr)
+            return {"query": s["missing"], "variants": [s["missing"]], "attempts": s["attempts"] + 1,
+                    "queries": s.get("queries", []) + [s["missing"]]}
+        out = ask(REWRITE.format(q=s["question"], prev=" | ".join(s.get("variants") or [s["query"]])))
+        variants = [line.strip(" -*\u2022\"'") for line in out.splitlines() if line.strip()][:N_VARIANTS] or [s["query"]]
+        print(f"rewrite #{s['attempts'] + 1}: {variants}", file=sys.stderr)
+        return {"query": variants[0], "variants": variants, "attempts": s["attempts"] + 1,
+                "queries": s.get("queries", []) + variants}
 
     def generate(s):
-        answer = ask(ANSWER.format(q=s["question"], ctx=fmt(s["docs"]) or "(no relevant context found)"), model)
+        answer = write(ANSWER.format(q=s["question"], ctx=fmt(s["docs"]) or "(no relevant context found)"))
         if answer.startswith(NOT_FOUND_MARK):
-            return {"answer": NOT_FOUND, "insufficient": True}
-        return {"answer": answer, "insufficient": False}
+            return {"answer": NOT_FOUND, "insufficient": True, "missing": None}
+        answer, missing = split_missing(answer)
+        return {"answer": answer, "insufficient": False, "missing": missing}
 
     def check(s):
         verdict = ask(GROUNDED.format(ctx=fmt(s["docs"]) or "(none)", a=s["answer"]))
@@ -277,8 +354,8 @@ def usage_summary(by_model: dict) -> dict:
 
 STEP_INFO = {
     "retrieve": lambda u: {"found": u.get("found", len(u.get("docs", []))), "kept": len(u.get("docs", []))},
-    "generate": lambda u: {"insufficient": u.get("insufficient", False)},
-    "rewrite": lambda u: {"query": u.get("query")},
+    "generate": lambda u: {"insufficient": u.get("insufficient", False), "missing": u.get("missing")},
+    "rewrite": lambda u: {"query": " | ".join(u.get("variants") or [u.get("query", "")])},
     "check": lambda u: {"grounded": u.get("grounded")},
 }
 
@@ -293,7 +370,8 @@ def stream(graph, question: str):
         from langfuse.langchain import CallbackHandler
         callbacks.append(CallbackHandler())
     state: State = {}
-    # hold back the start of each answer until it can't be the NOT_FOUND marker, so it never flashes in the UI
+    # hold back the start of each answer until it can't be the NOT_FOUND marker, and a final line that may be
+    # the MISSING line, so neither flashes in the UI
     pending, released = "", False
     for mode, chunk in graph.stream({"question": question, "query": question, "attempts": 0, "queries": []},
                                     config={"callbacks": callbacks, "run_name": "veritas"},
@@ -303,13 +381,14 @@ def stream(graph, question: str):
         elif mode == "messages":
             msg, meta = chunk
             if meta.get("langgraph_node") == "generate" and (t := text(msg)):
-                if released:
-                    yield {"type": "token", "text": t}
-                    continue
                 pending += t
-                if not could_be_marker(pending):
-                    released = True
-                    yield {"type": "token", "text": pending}
+                if not released and could_be_marker(pending):
+                    continue
+                released = True
+                cut = held_tail(pending)
+                if cut:
+                    yield {"type": "token", "text": pending[:cut]}
+                pending = pending[cut:]
         else:
             pending, released = "", False  # a node finished: the next generate pass starts fresh
             for node, update in chunk.items():

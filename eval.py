@@ -16,7 +16,7 @@ from ragas.embeddings import LangchainEmbeddingsWrapper
 from ragas.llms import LangchainLLMWrapper
 from ragas.metrics import Faithfulness, LLMContextPrecisionWithReference, LLMContextRecall, ResponseRelevancy
 
-from agent import build, embeddings, flush, llm, run, text, tracing
+from agent import build, embeddings, flush, label, llm, run, text, tracing
 
 METRICS = [Faithfulness(), ResponseRelevancy(), LLMContextPrecisionWithReference(), LLMContextRecall()]
 
@@ -26,6 +26,21 @@ Answer: {a}
 
 Does the answer decline to answer or say the information is not available, WITHOUT asserting a specific
 answer to the question? Reply "yes" or "no" only."""
+
+
+CORRECT = """Question: {q}
+Reference answer: {ref}
+Answer: {a}
+
+Does the answer correctly answer what the question asks, agreeing with the reference on every value it
+states? Judge only what the question asks for: the reference often adds detail the question did not ask
+about (ranges' upper bounds, conditions, related settings), and leaving that out is fine. Wrong values, a
+missing part of what was asked, or "not found" are not. PDF text loses superscripts, so "n2" means n^2 and
+"2.3 · 1019" means 2.3 x 10^19. Reply "yes" or "no" only."""
+
+
+def judge_yes(judge_llm, prompt: str) -> bool:
+    return text(judge_llm.with_retry(stop_after_attempt=3).invoke(prompt)).strip().lower().startswith("yes")
 
 
 def evaluate_mode(baseline: bool) -> dict:
@@ -53,7 +68,9 @@ def evaluate_mode(baseline: bool) -> dict:
     judge_llm = llm(os.getenv("JUDGE_MODEL", "gemini-2.5-pro"))
     answerable = [(t, o) for t, o in zip(tests, runs) if o["type"] != "unanswerable"]
     rows = [{"user_input": t["question"], "response": o["answer"],
-             "retrieved_contexts": [d.page_content for d in o["docs"]] or [""],
+             # passages exactly as the generator saw them, source label included: without the label the judge
+             # counted every "(file.pdf p.3)" citation as an unsupported claim
+             "retrieved_contexts": [f"({label(d)})\n{d.page_content}" for d in o["docs"]] or [""],
              "reference": t["ground_truth"]} for t, o in answerable]
     df = evaluate(EvaluationDataset.from_list(rows), metrics=METRICS, llm=LangchainLLMWrapper(judge_llm),
                   embeddings=LangchainEmbeddingsWrapper(embeddings()),
@@ -61,11 +78,15 @@ def evaluate_mode(baseline: bool) -> dict:
     df["type"] = [o["type"] for _, o in answerable]
     names = [m.name for m in METRICS]
 
+    # faithfulness only checks claims against the passages, so a vague or "not found" answer can score high;
+    # correctness checks the answer actually matches the reference
+    df["correct"] = [float(judge_yes(judge_llm, CORRECT.format(q=t["question"], ref=t["ground_truth"], a=o["answer"])))
+                     for t, o in answerable]
+    names.append("correct")
     abstained = {}
     for t, o in zip(tests, runs):
         if o["type"] == "unanswerable":
-            verdict = text(judge_llm.with_retry(stop_after_attempt=3).invoke(ABSTAIN.format(q=t["question"], a=o["answer"])))
-            abstained[id(o)] = verdict.strip().lower().startswith("yes")
+            abstained[id(o)] = judge_yes(judge_llm, ABSTAIN.format(q=t["question"], a=o["answer"]))
 
     if tracing():
         from langfuse import get_client
@@ -80,10 +101,13 @@ def evaluate_mode(baseline: bool) -> dict:
         flush()
 
     print(df[["type", "user_input", *names]].to_string(max_colwidth=45))
+    details = df[["type", "user_input", "response", *names]].assign(retrieved_contexts=df["retrieved_contexts"])
+    Path(f"eval_details_{'baseline' if baseline else 'agentic'}.json").write_text(
+        details.to_json(orient="records", indent=1, force_ascii=False), encoding="utf-8")  # per-question, for debugging
     summary = {n: round(float(df[n].mean()), 3) for n in names}
     for kind in ("direct", "vague", "messy"):
         part = df[df["type"] == kind]
-        for n in ("faithfulness", "context_recall"):
+        for n in ("faithfulness", "context_recall", "correct"):
             if len(part):
                 summary[f"{n} [{kind}]"] = round(float(part[n].mean()), 3)
     summary["abstention_rate [unanswerable]"] = round(sum(abstained.values()) / len(abstained), 3) if abstained else None
