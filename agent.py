@@ -84,11 +84,11 @@ def llm(model: str | None = None, thinking_budget: int | None = None):
         from langchain_google_vertexai.model_garden import ChatAnthropicVertex
         return ChatAnthropicVertex(model_name=model, project=project, location=os.getenv("CLAUDE_LOCATION", "us-east5"),
                                    temperature=0, timeout=LLM_TIMEOUT, max_retries=2)
-    from langchain_google_vertexai import ChatVertexAI
-    # REST, not gRPC: a gRPC channel used from several server threads can hang forever on a call
+    from langchain_google_genai import ChatGoogleGenerativeAI  # replaces deprecated ChatVertexAI (HTTP, no gRPC)
     extra = {} if thinking_budget is None else {"thinking_budget": thinking_budget}
-    return ChatVertexAI(model_name=model, project=project, location=os.getenv("GOOGLE_CLOUD_LOCATION", "global"),
-                        temperature=0, api_transport="rest", timeout=LLM_TIMEOUT, max_retries=2, **extra)
+    return ChatGoogleGenerativeAI(model=model, vertexai=True, project=project,
+                                  location=os.getenv("GOOGLE_CLOUD_LOCATION", "global"),
+                                  temperature=0, timeout=LLM_TIMEOUT, max_retries=2, **extra)
 
 
 class QueryCachedEmbeddings(Embeddings):
@@ -110,10 +110,11 @@ class QueryCachedEmbeddings(Embeddings):
 
 
 def embeddings():
-    from langchain_google_vertexai import VertexAIEmbeddings
+    from langchain_google_genai import GoogleGenerativeAIEmbeddings  # replaces deprecated VertexAIEmbeddings; same vectors
     name = os.getenv("EMBED_MODEL", "text-embedding-005")
-    return QueryCachedEmbeddings(VertexAIEmbeddings(model_name=name, project=os.getenv("GOOGLE_CLOUD_PROJECT"),
-                                                    location=os.getenv("EMBED_LOCATION", "us-central1")), name)
+    return QueryCachedEmbeddings(GoogleGenerativeAIEmbeddings(model=name, vertexai=True,
+                                                              project=os.getenv("GOOGLE_CLOUD_PROJECT"),
+                                                              location=os.getenv("EMBED_LOCATION", "us-central1")), name)
 
 
 def sparse_embeddings():
