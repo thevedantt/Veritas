@@ -1,0 +1,18 @@
+{
+  "faithfulness": 0.872,
+  "answer_relevancy": 0.656,
+  "llm_context_precision_with_reference": 0.817,
+  "context_recall": 0.85,
+  "faithfulness [direct]": 0.817,
+  "context_recall [direct]": 0.967,
+  "faithfulness [vague]": 0.9,
+  "context_recall [vague]": 1.0,
+  "faithfulness [messy]": 0.942,
+  "context_recall [messy]": 0.6,
+  "abstention_rate [unanswerable]": 1.0,
+  "rewrite_rate": 0.152,
+  "mean_attempts": 0.36,
+  "mean_seconds": 14.1,
+  "mean_cost_usd": 0.00396,
+  "n": 33
+}
