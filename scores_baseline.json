@@ -1,8 +1,10 @@
 {
-  "faithfulness": 0.845,
-  "answer_relevancy": 0.792,
+  "faithfulness": 0.767,
+  "answer_relevancy": 0.791,
   "llm_context_precision_with_reference": 0.801,
   "context_recall": 1.0,
   "mean_attempts": 0.0,
+  "mean_seconds": 9.0,
+  "mean_cost_usd": 0.00225,
   "n": 15
 }
