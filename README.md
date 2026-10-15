@@ -79,11 +79,13 @@ same judge. Generator `gemini-3.8-flash`, critic (grade, rewrite, grounding chec
 <!-- scores:start -->
 | Metric | Baseline (retrieve → generate) | Self-correcting agent | Δ |
 |---|---|---|---|
-| faithfulness | 0.767 | 0.869 | +0.102 |
-| answer_relevancy | 0.791 | 0.811 | +0.02 |
+| faithfulness | 0.767 | 0.726 | -0.041 |
+| answer_relevancy | 0.791 | 0.803 | +0.012 |
 | llm_context_precision_with_reference | 0.801 | 0.939 | +0.138 |
-| context_recall | 1 | 0.933 | -0.067 |
+| context_recall | 1 | 0.967 | -0.033 |
 | mean_attempts | 0 | 0 | +0 |
+| mean_seconds | 9 | 15.9 | +6.9 |
+| mean_cost_usd | 0.00225 | 0.0025 | +0.00025 |
 
 _15 questions from `testset.json`, judged by Ragas._
 <!-- scores:end -->
