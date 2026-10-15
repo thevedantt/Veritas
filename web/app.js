@@ -55,7 +55,8 @@ function renderJobs(jobs) {
     const li = el("li", `job ${j.status === "error" ? "error" : ""}`);
     if (ACTIVE.has(j.status)) li.append(el("span", "spin"));
     li.append(el("span", "name", j.name));
-    li.append(el("span", "state", j.status === "error" ? j.error : STATE_TEXT[j.status] ?? j.status));
+    const progress = j.pages_total ? `${j.pages_done ?? 0}/${j.pages_total} pages · searchable as it goes` : null;
+    li.append(el("span", "state", j.status === "error" ? j.error : (j.status === "parsing" && progress) || STATE_TEXT[j.status] || j.status));
     if (j.status === "error") {
       const close = el("button", "icon-btn", "×");
       close.type = "button";
@@ -212,10 +213,11 @@ function renderAnswer(data) {
 }
 
 const STEP_TEXT = {
-  retrieve: e => `Searched the library: ${e.found} passage${e.found === 1 ? "" : "s"}`,
-  grade: e => `Kept ${e.kept} relevant passage${e.kept === 1 ? "" : "s"}`,
+  retrieve: e => (e.found > e.kept
+    ? `Found ${e.found} passages, kept the best ${e.kept}`
+    : `Found ${e.kept} passage${e.kept === 1 ? "" : "s"}`),
   rewrite: e => `Rewrote the search: “${e.query}”`,
-  generate: () => "Checking the answer against the sources…",
+  generate: e => (e.insufficient ? "Not in those passages, searching again…" : "Checking the answer against the sources…"),
   check: e => (e.grounded ? "Answer is supported by the sources" : "Answer not fully supported, searching again…"),
 };
 

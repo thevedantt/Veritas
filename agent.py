@@ -1,13 +1,13 @@
-"""Self-correcting agentic RAG: retrieve -> grade -> (rewrite + retry) -> generate -> grounding check.
+"""Self-correcting agentic RAG: retrieve + rerank -> generate (or NOT_FOUND -> rewrite + retry) -> grounding check.
 
 CLI: python agent.py "your question"
 """
 import os
 import hashlib
-import re
 import sys
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from typing import TypedDict
 
 from dotenv import load_dotenv
@@ -15,13 +15,18 @@ from langchain_core.callbacks import UsageMetadataCallbackHandler
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
 from langgraph.graph import END, StateGraph
+from qdrant_client import models
 
 from cache import EMBED_TTL, cache
 
 load_dotenv()
 MAX_ATTEMPTS = int(os.getenv("MAX_ATTEMPTS", 3))
-MIN_RELEVANT = 1  # answers often sit in a single table chunk
-K = 6
+# retrieve K_FETCH candidates by hybrid search, keep the K_KEEP best after reranking (fewer, better passages
+# also make generation faster and cheaper); the baseline keeps plain hybrid top-K_BASELINE
+K_FETCH, K_KEEP, K_BASELINE = 10, 5, 6
+RERANKER = os.getenv("RERANKER", "jinaai/jina-reranker-v1-turbo-en")  # "off" disables; 8K context for long tables
+NOT_FOUND_MARK = "NOT_FOUND"
+NOT_FOUND = "I couldn't find this in the documents."
 # Gemini 3.x on the global endpoint has slow outliers (20-50s for a one-word reply); cap each call and
 # retry, since a retried call is usually fast. The client's own retries skip read timeouts.
 LLM_TIMEOUT, LLM_ATTEMPTS = 45, 3
@@ -34,14 +39,6 @@ COLLECTION, QDRANT_PATH = "docs", "qdrant_data"
 # switch to a Qdrant server for concurrent reads/writes
 DB_LOCK = threading.Lock()
 
-GRADE = """Question: {q}
-
-Passages:
-{ctx}
-
-List the numbers of the passages that contain information useful for answering the question,
-comma-separated (e.g. "0, 3"). Reply "none" if no passage is useful. Reply with numbers only."""
-
 REWRITE = """The search query below did not retrieve enough relevant passages from a document collection.
 Original question: {q}
 Previous query: {prev}
@@ -50,7 +47,8 @@ Write one better search query: expand acronyms, add likely synonyms, table names
 Reply with the query only."""
 
 ANSWER = """Answer the question using only the context. After each claim cite its source using the label in parentheses above the passage, e.g. (report.pdf p.3).
-If the context is insufficient, say so plainly instead of guessing. Write plain text: no LaTeX or math markup.
+If the context contains part of the answer, give that part and say what is missing. If it contains nothing
+that answers the question, reply with exactly NOT_FOUND and nothing else. Write plain text: no LaTeX or math markup.
 
 Context:
 {ctx}
@@ -71,7 +69,9 @@ class State(TypedDict, total=False):
     question: str
     query: str
     docs: list[Document]
-    kept: list[Document]  # relevant docs found so far, carried across retries
+    kept: list[Document]  # best docs found so far, carried across retries and re-ranked with new results
+    found: int
+    insufficient: bool
     answer: str
     attempts: int
     grounded: bool
@@ -151,12 +151,48 @@ def fmt(docs: list[Document]) -> str:
     return "\n\n".join(f"[{i}] ({label(d)})\n{d.page_content}" for i, d in enumerate(docs))
 
 
-def parse_indices(text: str, n: int) -> list[int]:
-    return sorted({int(x) for x in re.findall(r"\d+", text) if int(x) < n})
+_executor = ThreadPoolExecutor(8)
+_reranker, _reranker_lock = None, threading.Lock()
 
 
-def after_grade(s: State, max_attempts: int) -> str:
-    return "generate" if len(s["docs"]) >= MIN_RELEVANT or s["attempts"] >= max_attempts else "rewrite"
+def hybrid_search(vs, query: str, k: int) -> list[Document]:
+    """Dense + BM25 search fused with RRF. Both query embeddings are computed in parallel and outside
+    DB_LOCK, so one user's embedding call never makes another user's search wait."""
+    dense = _executor.submit(vs.embeddings.embed_query, query)
+    sparse = _executor.submit(vs.sparse_embeddings.embed_query, query)
+    dense, sparse = dense.result(), sparse.result()
+    with DB_LOCK:
+        points = vs.client.query_points(COLLECTION, prefetch=[
+            models.Prefetch(query=dense, using=vs.vector_name, limit=k),
+            models.Prefetch(query=models.SparseVector(indices=sparse.indices, values=sparse.values),
+                            using=vs.sparse_vector_name, limit=k),
+        ], query=models.FusionQuery(fusion=models.Fusion.RRF), limit=k, with_payload=True).points
+    return [Document(page_content=p.payload["page_content"], metadata=p.payload.get("metadata") or {}) for p in points]
+
+
+def rerank(question: str, docs: list[Document], keep: int) -> list[Document]:
+    """Order passages with a local cross-encoder (~0.1-0.5s, no API call). It ranks well but its raw
+    scores can't tell "relevant" from "not" reliably, so the generator decides sufficiency (NOT_FOUND)."""
+    global _reranker
+    if RERANKER == "off" or len(docs) <= 1:
+        return docs[:keep]
+    with _reranker_lock:
+        if _reranker is None:
+            from fastembed.rerank.cross_encoder import TextCrossEncoder
+            _reranker = TextCrossEncoder(RERANKER)
+    scores = list(_reranker.rerank(question, [d.page_content for d in docs]))
+    return [docs[i] for i in sorted(range(len(docs)), key=lambda i: -scores[i])[:keep]]
+
+
+def could_be_marker(pending: str) -> bool:
+    """True while the streamed answer so far could still turn out to be the NOT_FOUND marker."""
+    return NOT_FOUND_MARK.startswith(pending.lstrip()[:len(NOT_FOUND_MARK)])
+
+
+def after_generate(s: State, max_attempts: int) -> str:
+    if s.get("insufficient"):
+        return "rewrite" if s["attempts"] < max_attempts else END  # "not found" makes no claims to check
+    return "check"
 
 
 def after_check(s: State, max_attempts: int) -> str:
@@ -171,23 +207,21 @@ def text(msg) -> str:
 def build(max_attempts: int = MAX_ATTEMPTS, vs=None):
     # generator answers; a different critic model grades, rewrites and checks so no model judges itself
     # critic calls are short yes/no-style tasks: thinking off by default (thinking tokens bill as output)
-    model = llm().with_retry(stop_after_attempt=LLM_ATTEMPTS)
+    # generator thinking off by default too: reasoning tokens delay the first word by seconds
+    model = llm(None, int(os.getenv("GENERATOR_THINKING_BUDGET", 0))).with_retry(stop_after_attempt=LLM_ATTEMPTS)
     critic = llm(os.getenv("CRITIC_MODEL", "gemini-2.5-flash"),
                  int(os.getenv("CRITIC_THINKING_BUDGET", 0))).with_retry(stop_after_attempt=LLM_ATTEMPTS)
     vs = vs or store()
     ask = lambda prompt, m=critic: text(m.invoke(prompt)).strip()
 
     def retrieve(s):
-        with DB_LOCK:
-            return {"docs": vs.similarity_search(s["query"], k=K)}
-
-    def grade(s):
+        if max_attempts == 0:  # baseline: plain hybrid search, no reranking
+            return {"docs": hybrid_search(vs, s["query"], K_BASELINE)}
+        found = hybrid_search(vs, s["query"], K_FETCH)
         kept = s.get("kept", [])
         seen = {d.page_content for d in kept}
-        new = [d for d in s["docs"] if d.page_content not in seen]
-        keep = parse_indices(ask(GRADE.format(q=s["question"], ctx=fmt(new))), len(new)) if new else []
-        kept = kept + [new[i] for i in keep]
-        return {"docs": kept, "kept": kept}
+        docs = rerank(s["question"], kept + [d for d in found if d.page_content not in seen], K_KEEP)
+        return {"docs": docs, "kept": docs, "found": len(found)}
 
     def rewrite(s):
         q = ask(REWRITE.format(q=s["question"], prev=s["query"]))
@@ -195,7 +229,10 @@ def build(max_attempts: int = MAX_ATTEMPTS, vs=None):
         return {"query": q, "attempts": s["attempts"] + 1, "queries": s.get("queries", []) + [q]}
 
     def generate(s):
-        return {"answer": ask(ANSWER.format(q=s["question"], ctx=fmt(s["docs"]) or "(no relevant context found)"), model)}
+        answer = ask(ANSWER.format(q=s["question"], ctx=fmt(s["docs"]) or "(no relevant context found)"), model)
+        if answer.startswith(NOT_FOUND_MARK):
+            return {"answer": NOT_FOUND, "insufficient": True}
+        return {"answer": answer, "insufficient": False}
 
     def check(s):
         verdict = ask(GROUNDED.format(ctx=fmt(s["docs"]) or "(none)", a=s["answer"]))
@@ -205,17 +242,15 @@ def build(max_attempts: int = MAX_ATTEMPTS, vs=None):
     g.add_node("retrieve", retrieve)
     g.add_node("generate", generate)
     g.set_entry_point("retrieve")
-    if max_attempts == 0:  # baseline: plain retrieve -> generate, no grading or self-correction
+    if max_attempts == 0:  # baseline: plain retrieve -> generate, no reranking or self-correction
         g.add_edge("retrieve", "generate")
         g.add_edge("generate", END)
         return g.compile()
-    g.add_node("grade", grade)
     g.add_node("rewrite", rewrite)
     g.add_node("check", check)
-    g.add_edge("retrieve", "grade")
-    g.add_conditional_edges("grade", lambda s: after_grade(s, max_attempts), ["generate", "rewrite"])
+    g.add_edge("retrieve", "generate")
+    g.add_conditional_edges("generate", lambda s: after_generate(s, max_attempts), ["check", "rewrite", END])
     g.add_edge("rewrite", "retrieve")
-    g.add_edge("generate", "check")
     g.add_conditional_edges("check", lambda s: after_check(s, max_attempts), [END, "rewrite"])
     return g.compile()
 
@@ -241,8 +276,8 @@ def usage_summary(by_model: dict) -> dict:
 
 
 STEP_INFO = {
-    "retrieve": lambda u: {"found": len(u.get("docs", []))},
-    "grade": lambda u: {"kept": len(u.get("docs", []))},
+    "retrieve": lambda u: {"found": u.get("found", len(u.get("docs", []))), "kept": len(u.get("docs", []))},
+    "generate": lambda u: {"insufficient": u.get("insufficient", False)},
     "rewrite": lambda u: {"query": u.get("query")},
     "check": lambda u: {"grounded": u.get("grounded")},
 }
@@ -258,6 +293,8 @@ def stream(graph, question: str):
         from langfuse.langchain import CallbackHandler
         callbacks.append(CallbackHandler())
     state: State = {}
+    # hold back the start of each answer until it can't be the NOT_FOUND marker, so it never flashes in the UI
+    pending, released = "", False
     for mode, chunk in graph.stream({"question": question, "query": question, "attempts": 0, "queries": []},
                                     config={"callbacks": callbacks, "run_name": "veritas"},
                                     stream_mode=["values", "updates", "messages"]):
@@ -266,8 +303,15 @@ def stream(graph, question: str):
         elif mode == "messages":
             msg, meta = chunk
             if meta.get("langgraph_node") == "generate" and (t := text(msg)):
-                yield {"type": "token", "text": t}
+                if released:
+                    yield {"type": "token", "text": t}
+                    continue
+                pending += t
+                if not could_be_marker(pending):
+                    released = True
+                    yield {"type": "token", "text": pending}
         else:
+            pending, released = "", False  # a node finished: the next generate pass starts fresh
             for node, update in chunk.items():
                 yield {"type": "step", "node": node, **STEP_INFO.get(node, lambda u: {})(update or {})}
     state["trace_id"] = callbacks[1].last_trace_id if len(callbacks) > 1 else None

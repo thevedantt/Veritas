@@ -6,6 +6,7 @@ python ingest.py data/            # add new files from a folder; already-indexed
 python ingest.py --reset data/    # wipe the collection and rebuild it from the folder
 """
 import hashlib
+import os
 import re
 import shutil
 import sys
@@ -18,6 +19,7 @@ from qdrant_client import models
 from agent import COLLECTION, DB_LOCK, QDRANT_PATH, store
 from cache import library_changed
 
+PAGE_BATCH = 4  # PDFs are parsed and indexed a few pages at a time, so early pages are searchable within seconds
 SUPPORTED = {".pdf", ".docx", ".pptx", ".xlsx", ".html", ".htm", ".md", ".csv",
              ".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp", ".webp"}
 _tools = None
@@ -28,7 +30,10 @@ def tools():
     global _tools
     if _tools is None:
         from docling.chunking import HybridChunker
-        from docling.document_converter import DocumentConverter
+        from docling.datamodel.accelerator_options import AcceleratorDevice, AcceleratorOptions
+        from docling.datamodel.base_models import InputFormat
+        from docling.datamodel.pipeline_options import PdfPipelineOptions, TableFormerMode
+        from docling.document_converter import DocumentConverter, PdfFormatOption
         from docling_core.transforms.chunker.hierarchical_chunker import (ChunkingDocSerializer,
                                                                           ChunkingSerializerProvider)
         from docling_core.transforms.serializer.markdown import MarkdownTableSerializer
@@ -39,7 +44,14 @@ def tools():
             def get_serializer(self, doc):
                 return ChunkingDocSerializer(doc=doc, table_serializer=MarkdownTableSerializer())
 
-        _tools = DocumentConverter(), HybridChunker(serializer_provider=MarkdownTables())
+        # GPU when PyTorch has CUDA (layout, tables and OCR models), all CPU cores otherwise. OCR runs only on
+        # image regions, so digital PDFs skip it. TABLE_MODE=fast trades some table accuracy for speed.
+        pdf = PdfPipelineOptions(accelerator_options=AcceleratorOptions(device=AcceleratorDevice.AUTO,
+                                                                        num_threads=os.cpu_count() or 4))
+        if os.getenv("TABLE_MODE", "accurate") == "fast":
+            pdf.table_structure_options.mode = TableFormerMode.FAST
+        converter = DocumentConverter(format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=pdf)})
+        _tools = converter, HybridChunker(serializer_provider=MarkdownTables())
     return _tools
 
 
@@ -52,10 +64,30 @@ def doc_id(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()[:16]
 
 
-def chunk(name: str, data: bytes) -> list[Document]:
+def page_count(name: str, data: bytes) -> int | None:
+    if not name.lower().endswith(".pdf"):
+        return None
+    import pypdfium2
+    return len(pypdfium2.PdfDocument(data))
+
+
+def chunk_batches(name: str, data: bytes):
+    """Yield (chunks, pages_done, pages_total) as a document is parsed: PDFs PAGE_BATCH pages at a time,
+    other formats in one pass (pages_total None)."""
+    total = page_count(name, data)
+    if not total:
+        yield chunk(name, data), None, None
+        return
+    for first in range(1, total + 1, PAGE_BATCH):
+        last = min(first + PAGE_BATCH - 1, total)
+        yield chunk(name, data, (first, last)), last, total
+
+
+def chunk(name: str, data: bytes, pages: tuple[int, int] | None = None) -> list[Document]:
     from docling.datamodel.base_models import DocumentStream
     converter, chunker = tools()
-    dl = converter.convert(DocumentStream(name=name, stream=BytesIO(data))).document
+    kwargs = {"page_range": pages} if pages else {}
+    dl = converter.convert(DocumentStream(name=name, stream=BytesIO(data)), **kwargs).document
     did, docs = doc_id(data), []
     for c in chunker.chunk(dl_doc=dl):
         prov = c.meta.doc_items[0].prov if c.meta.doc_items else []
@@ -129,12 +161,14 @@ def main(args: list[str]):
         if exists(vs, doc_id(data)):
             print(f"{f.name}: already indexed, skipped")
             continue
-        docs = chunk(f.name, data)
-        if not docs:
-            print(f"{f.name}: no text found, skipped")
-            continue
-        add(vs, docs)
-        print(f"{f.name}: {len(docs)} chunks, {sum(d.metadata['has_table'] for d in docs)} with tables")
+        n = tables = 0
+        for docs, done, total in chunk_batches(f.name, data):
+            if docs:
+                add(vs, docs)
+                n, tables = n + len(docs), tables + sum(d.metadata["has_table"] for d in docs)
+            if total:
+                print(f"  {f.name}: pages {done}/{total}", end="\r")
+        print(f"{f.name}: {n} chunks, {tables} with tables" if n else f"{f.name}: no text found, skipped")
     vs.client.close()  # release the embedded Qdrant lock cleanly before exit
 
 

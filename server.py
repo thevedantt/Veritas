@@ -21,7 +21,7 @@ from urllib.parse import parse_qs, unquote, urlsplit
 
 from agent import build, flush, run, store, stream, tracing
 from cache import ANSWER_TTL, cache, library_version
-from ingest import SUPPORTED, add, chunk, delete, doc_id, exists, list_documents
+from ingest import SUPPORTED, add, chunk_batches, delete, doc_id, exists, list_documents
 
 MAX_UPLOAD = 50 * 1024 * 1024
 UPLOADS = Path("uploads")
@@ -39,12 +39,14 @@ def worker():
         job, data = QUEUE.get()
         try:
             job["status"] = "parsing"
-            docs = chunk(job["name"], data)
-            if not docs:
+            for docs, done, total in chunk_batches(job["name"], data):  # pages become searchable batch by batch
+                if docs:
+                    add(vs, docs)
+                    job["chunks"] += len(docs)
+                job.update(pages_done=done, pages_total=total)
+            if not job["chunks"]:
                 raise ValueError("no text could be extracted from this file")
-            job["status"] = "indexing"
-            add(vs, docs)
-            job.update(status="done", chunks=len(docs))
+            job["status"] = "done"
         except ValueError as e:
             job.update(status="error", error=str(e))
         except Exception:
