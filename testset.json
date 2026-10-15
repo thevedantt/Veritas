@@ -6,7 +6,7 @@
  },
  {
   "question": "What BLEU score does the big Transformer achieve on WMT 2014 English-to-French?",
-  "ground_truth": "The big Transformer achieves a BLEU score of 41.8 on WMT 2014 English-to-French.",
+  "ground_truth": "41.8 BLEU on WMT 2014 English-to-French (abstract and Table 2). The paper is inconsistent: the text of section 6.1 says 41.0, so an answer giving 41.8, or giving both and noting the conflict, is correct.",
   "type": "direct"
  },
  {

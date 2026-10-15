@@ -155,7 +155,7 @@ function addThinking(selfCorrecting) {
   const msg = el("article", "msg bot thinking");
   const dots = el("span", "dots");
   dots.append(el("i"), el("i"), el("i"));
-  msg.append(dots, el("span", null, selfCorrecting ? "Retrieving, grading, checking grounding…" : "Retrieving and answering…"));
+  msg.append(dots, el("span", null, selfCorrecting ? "Searching, answering, checking grounding…" : "Retrieving and answering…"));
   thread.append(msg);
   return msg;
 }
@@ -217,7 +217,9 @@ const STEP_TEXT = {
     ? `Found ${e.found} passages, kept the best ${e.kept}`
     : `Found ${e.kept} passage${e.kept === 1 ? "" : "s"}`),
   rewrite: e => `Rewrote the search: “${e.query}”`,
-  generate: e => (e.insufficient ? "Not in those passages, searching again…" : "Checking the answer against the sources…"),
+  generate: e => (e.insufficient ? "Not in those passages, searching again…"
+    : e.missing ? `Part of the answer is missing, searching for “${e.missing}”…`
+    : "Checking the answer against the sources…"),
   check: e => (e.grounded ? "Answer is supported by the sources" : "Answer not fully supported, searching again…"),
 };
 
