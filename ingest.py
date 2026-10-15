@@ -6,6 +6,7 @@ python ingest.py data/            # add new files from a folder; already-indexed
 python ingest.py --reset data/    # wipe the collection and rebuild it from the folder
 """
 import hashlib
+import re
 import shutil
 import sys
 from io import BytesIO
@@ -28,8 +29,23 @@ def tools():
     if _tools is None:
         from docling.chunking import HybridChunker
         from docling.document_converter import DocumentConverter
-        _tools = DocumentConverter(), HybridChunker()
+        from docling_core.transforms.chunker.hierarchical_chunker import (ChunkingDocSerializer,
+                                                                          ChunkingSerializerProvider)
+        from docling_core.transforms.serializer.markdown import MarkdownTableSerializer
+
+        class MarkdownTables(ChunkingSerializerProvider):
+            # Markdown rows keep each table row on one line with its column order; the default
+            # "header = value" triplets scrambled rows of OCR'd tables across many tiny chunks
+            def get_serializer(self, doc):
+                return ChunkingDocSerializer(doc=doc, table_serializer=MarkdownTableSerializer())
+
+        _tools = DocumentConverter(), HybridChunker(serializer_provider=MarkdownTables())
     return _tools
+
+
+def compact(text: str) -> str:
+    """Drop Markdown cell padding (runs of spaces / dashes), which otherwise costs embedding and LLM tokens."""
+    return re.sub(r"-{4,}", "---", re.sub(r"[ \t]{2,}", " ", text))
 
 
 def doc_id(data: bytes) -> str:
@@ -44,7 +60,7 @@ def chunk(name: str, data: bytes) -> list[Document]:
     for c in chunker.chunk(dl_doc=dl):
         prov = c.meta.doc_items[0].prov if c.meta.doc_items else []
         docs.append(Document(
-            page_content=chunker.contextualize(c),  # prepends section headings; tables serialized row by row
+            page_content=compact(chunker.contextualize(c)),  # prepends section headings; tables as Markdown rows
             metadata={"doc_id": did, "source": name, "page": prov[0].page_no if prov else None,
                       "headings": " > ".join(c.meta.headings or []),
                       "has_table": any(i.label == "table" for i in c.meta.doc_items)}))
