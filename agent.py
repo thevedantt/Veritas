@@ -2,13 +2,15 @@
 
 CLI: python agent.py "your question"
 """
-import os
 import hashlib
+import json
+import os
 import sys
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from itertools import zip_longest
+from pathlib import Path
 from typing import TypedDict
 
 from dotenv import load_dotenv
@@ -38,11 +40,17 @@ K_EXTRA = 2  # passages added per targeted search for a missing part (on top of 
 LLM_TIMEOUT, LLM_ATTEMPTS = 45, 3
 # the generator gets one short try; if it stalls, FALLBACK_MODEL answers instead of waiting out retries
 PRIMARY_TIMEOUT = int(os.getenv("PRIMARY_TIMEOUT", 15))
-PRIMARY_COOLDOWN = 120  # seconds to skip a failed primary before trying it again
+PRIMARY_COOLDOWN = int(os.getenv("PRIMARY_COOLDOWN", 30))  # seconds to skip a failed primary; longer = fewer
+# timeouts during an outage, but more answers from the weaker fallback after a one-off stall
 _primary_down_until = [0.0]  # shared by every graph in the process
 # USD per 1M tokens (input, output incl. reasoning), Vertex AI global endpoint, list prices checked 2026-10-14:
 # https://cloud.google.com/vertex-ai/generative-ai/pricing (3.8 Flash is an introductory rate until 2026-12-31).
 # Models not listed report tokens without a cost.
+# Hard monthly spend cap across chat, scanned-page reading and evals, tracked in SPEND_FILE from token usage.
+# Models missing from PRICES are charged at UNKNOWN_PRICE, a deliberately high guess, so the cap never undercounts.
+MONTHLY_BUDGET_USD = float(os.getenv("MONTHLY_BUDGET_USD", 5))
+SPEND_FILE = Path(os.getenv("SPEND_FILE", "spend.json"))
+UNKNOWN_PRICE = (2.50, 15.00)
 PRICES = {"gemini-3.8-flash": (0.75, 3.75), "gemini-2.5-flash": (0.30, 2.50), "gemini-2.5-flash-lite": (0.10, 0.40),
           "gemini-2.5-pro": (1.25, 10.00)}
 COLLECTION, QDRANT_PATH = "docs", "qdrant_data"
@@ -336,6 +344,50 @@ def tracing() -> bool:
     return bool(os.getenv("LANGFUSE_PUBLIC_KEY"))
 
 
+class BudgetExceeded(RuntimeError):
+    pass
+
+
+_spend_lock = threading.Lock()
+
+
+def cost_of(by_model: dict) -> float:
+    """USD for token usage by model; unknown models at UNKNOWN_PRICE (for the budget, never undercount)."""
+    total = 0.0
+    for name, u in by_model.items():
+        i = u.get("input_tokens", 0)
+        price_in, price_out = PRICES.get(name, UNKNOWN_PRICE)
+        total += (i * price_in + (u.get("total_tokens", 0) - i) * price_out) / 1e6
+    return total
+
+
+def spent() -> float:
+    """USD spent this calendar month (UTC)."""
+    with _spend_lock:
+        try:
+            return json.loads(SPEND_FILE.read_text()).get(time.strftime("%Y-%m", time.gmtime()), 0.0)
+        except (OSError, ValueError):
+            return 0.0
+
+
+def charge(usd: float):
+    if usd <= 0:
+        return
+    month = time.strftime("%Y-%m", time.gmtime())
+    with _spend_lock:  # ponytail: one process writes the file; a shared store (Redis/Postgres) once there are several
+        try:
+            ledger = json.loads(SPEND_FILE.read_text())
+        except (OSError, ValueError):
+            ledger = {}
+        ledger[month] = round(ledger.get(month, 0.0) + usd, 6)
+        SPEND_FILE.write_text(json.dumps(ledger, indent=1))
+
+
+def check_budget():
+    if spent() >= MONTHLY_BUDGET_USD:
+        raise BudgetExceeded(f"monthly AI budget of ${MONTHLY_BUDGET_USD:.2f} reached")
+
+
 def usage_summary(by_model: dict) -> dict:
     """Token totals and estimated cost; output counts reasoning tokens, which are billed as output."""
     tokens_in = tokens_out = 0
@@ -373,26 +425,30 @@ def stream(graph, question: str):
     # hold back the start of each answer until it can't be the NOT_FOUND marker, and a final line that may be
     # the MISSING line, so neither flashes in the UI
     pending, released = "", False
-    for mode, chunk in graph.stream({"question": question, "query": question, "attempts": 0, "queries": []},
-                                    config={"callbacks": callbacks, "run_name": "veritas"},
-                                    stream_mode=["values", "updates", "messages"]):
-        if mode == "values":
-            state = chunk
-        elif mode == "messages":
-            msg, meta = chunk
-            if meta.get("langgraph_node") == "generate" and (t := text(msg)):
-                pending += t
-                if not released and could_be_marker(pending):
-                    continue
-                released = True
-                cut = held_tail(pending)
-                if cut:
-                    yield {"type": "token", "text": pending[:cut]}
-                pending = pending[cut:]
-        else:
-            pending, released = "", False  # a node finished: the next generate pass starts fresh
-            for node, update in chunk.items():
-                yield {"type": "step", "node": node, **STEP_INFO.get(node, lambda u: {})(update or {})}
+    check_budget()
+    try:
+        for mode, chunk in graph.stream({"question": question, "query": question, "attempts": 0, "queries": []},
+                                        config={"callbacks": callbacks, "run_name": "veritas"},
+                                        stream_mode=["values", "updates", "messages"]):
+            if mode == "values":
+                state = chunk
+            elif mode == "messages":
+                msg, meta = chunk
+                if meta.get("langgraph_node") == "generate" and (t := text(msg)):
+                    pending += t
+                    if not released and could_be_marker(pending):
+                        continue
+                    released = True
+                    cut = held_tail(pending)
+                    if cut:
+                        yield {"type": "token", "text": pending[:cut]}
+                    pending = pending[cut:]
+            else:
+                pending, released = "", False  # a node finished: the next generate pass starts fresh
+                for node, update in chunk.items():
+                    yield {"type": "step", "node": node, **STEP_INFO.get(node, lambda u: {})(update or {})}
+    finally:
+        charge(cost_of(usage.usage_metadata))  # billed even when a run fails part-way
     state["trace_id"] = callbacks[1].last_trace_id if len(callbacks) > 1 else None
     state["usage"] = usage_summary(usage.usage_metadata)
     yield {"type": "done", "result": state}

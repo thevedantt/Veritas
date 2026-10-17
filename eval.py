@@ -1,8 +1,14 @@
-"""Score the agent on testset.json with Ragas and attach scores to the Langfuse traces.
+"""Score the agent on testset.json with one cheap LLM-judge call per question; attach scores to Langfuse traces.
 
-python eval.py              # self-correcting agent  -> scores_agentic.json
-python eval.py --baseline   # plain retrieve+generate -> scores_baseline.json
-Once both files exist the before/after table in README.md is regenerated.
+python eval.py                       # self-correcting agent  -> scores_agentic.json
+python eval.py --baseline            # plain retrieve+generate -> scores_baseline.json
+python eval.py --type messy          # only one question type (direct, vague, messy, unanswerable)
+python eval.py --limit 5             # only the first 5 questions (after --type)
+Once both full-run files exist the before/after table in README.md is regenerated.
+
+Cost: each run stops before it spends more than EVAL_BUDGET_USD (default $1). The judge is flash-lite with
+thinking off; a full 33-question agent run costs about $0.03-0.05 (answers ~$0.0007 each, judge ~$0.0004 each).
+The earlier Ragas + gemini-2.5-pro judge made 10-20 thinking calls per question and cost several dollars a run.
 """
 import json
 import os
@@ -11,15 +17,32 @@ import sys
 import time
 from pathlib import Path
 
-from ragas import EvaluationDataset, RunConfig, evaluate
-from ragas.embeddings import LangchainEmbeddingsWrapper
-from ragas.llms import LangchainLLMWrapper
-from ragas.metrics import Faithfulness, LLMContextPrecisionWithReference, LLMContextRecall, ResponseRelevancy
+from langchain_core.callbacks import UsageMetadataCallbackHandler
 
-from agent import build, embeddings, flush, label, llm, run, text, tracing
+from agent import build, charge, cost_of, flush, label, llm, run, text, tracing
 
-METRICS = [Faithfulness(), ResponseRelevancy(), LLMContextPrecisionWithReference(), LLMContextRecall()]
+EVAL_BUDGET_USD = float(os.getenv("EVAL_BUDGET_USD", 1.0))
+JUDGE_MODEL = os.getenv("JUDGE_MODEL", "gemini-2.5-flash-lite")
 
+JUDGE = """You grade an answer produced by a document question-answering system.
+
+Question: {q}
+Reference answer: {ref}
+
+Passages the system was given:
+{ctx}
+
+System answer:
+{a}
+
+Reply with JSON only, no prose: {{"correct": true|false, "supported": true|false, "retrieved": true|false}}
+- correct: the answer correctly answers what the question asks, agreeing with the reference on every value it
+  states. The reference often adds detail the question did not ask about (ranges' upper bounds, conditions,
+  related settings); leaving that out is fine. Wrong values, a missing part of what was asked, or "not found"
+  are not correct. PDF text loses superscripts: "n2" means n^2 and "2.3 · 1019" means 2.3 x 10^19.
+- supported: every factual claim in the answer is stated in the passages. Citations such as (file.pdf p.3)
+  name a passage's label and are not claims.
+- retrieved: the passages contain the facts needed for the reference answer."""
 
 ABSTAIN = """Question: {q}
 Answer: {a}
@@ -28,28 +51,33 @@ Does the answer decline to answer or say the information is not available, WITHO
 answer to the question? Reply "yes" or "no" only."""
 
 
-CORRECT = """Question: {q}
-Reference answer: {ref}
-Answer: {a}
-
-Does the answer correctly answer what the question asks, agreeing with the reference on every value it
-states? Judge only what the question asks for: the reference often adds detail the question did not ask
-about (ranges' upper bounds, conditions, related settings), and leaving that out is fine. Wrong values, a
-missing part of what was asked, or "not found" are not. PDF text loses superscripts, so "n2" means n^2 and
-"2.3 · 1019" means 2.3 x 10^19. Reply "yes" or "no" only."""
-
-
-def judge_yes(judge_llm, prompt: str) -> bool:
-    return text(judge_llm.with_retry(stop_after_attempt=3).invoke(prompt)).strip().lower().startswith("yes")
+def verdict(raw: str) -> dict:
+    """Parse the judge's JSON reply; a malformed reply counts as all-false rather than crashing the run."""
+    m = re.search(r"\{.*\}", raw, re.S)
+    try:
+        v = json.loads(m[0]) if m else {}
+    except ValueError:
+        v = {}
+    return {k: bool(v.get(k, False)) for k in ("correct", "supported", "retrieved")}
 
 
-def evaluate_mode(baseline: bool) -> dict:
-    """Ragas scores answerable questions; unanswerable ones are scored on whether the system abstains
-    (there is no reference answer to compare against). Also breaks scores down by question type."""
+def pick(tests: list[dict], argv: list[str]) -> list[dict]:
+    if "--type" in argv:
+        tests = [t for t in tests if t.get("type", "direct") == argv[argv.index("--type") + 1]]
+    if "--limit" in argv:
+        tests = tests[:int(argv[argv.index("--limit") + 1])]
+    return tests
+
+
+def evaluate_mode(baseline: bool, tests: list[dict]) -> tuple[dict, list[dict]]:
     graph = build(max_attempts=0) if baseline else build()
-    tests = json.loads(Path("testset.json").read_text(encoding="utf-8"))
-    runs = []
+    judge = llm(JUDGE_MODEL, 0).with_retry(stop_after_attempt=3)
+    judge_usage = UsageMetadataCallbackHandler()
+    spent, rows = 0.0, []
     for i, t in enumerate(tests, 1):
+        if spent >= EVAL_BUDGET_USD:
+            print(f"stopping: eval budget ${EVAL_BUDGET_USD:.2f} reached after {i - 1} questions")
+            break
         for attempt in range(3):  # a throttled run (Vertex 429) waits and retries instead of killing the eval
             try:
                 start = time.perf_counter()
@@ -61,69 +89,61 @@ def evaluate_mode(baseline: bool) -> dict:
                     raise
                 print(f"  run failed ({type(e).__name__}: {str(e)[:80]}); retrying in 60s")
                 time.sleep(60)
-        out["type"] = t.get("type", "direct")
-        print(f"[{i}/{len(tests)}] {out['type']:<12} attempts={out['attempts']} {t['question'][:60]}")
-        runs.append(out)
-
-    judge_llm = llm(os.getenv("JUDGE_MODEL", "gemini-2.5-pro"))
-    answerable = [(t, o) for t, o in zip(tests, runs) if o["type"] != "unanswerable"]
-    rows = [{"user_input": t["question"], "response": o["answer"],
-             # passages exactly as the generator saw them, source label included: without the label the judge
-             # counted every "(file.pdf p.3)" citation as an unsupported claim
-             "retrieved_contexts": [f"({label(d)})\n{d.page_content}" for d in o["docs"]] or [""],
-             "reference": t["ground_truth"]} for t, o in answerable]
-    df = evaluate(EvaluationDataset.from_list(rows), metrics=METRICS, llm=LangchainLLMWrapper(judge_llm),
-                  embeddings=LangchainEmbeddingsWrapper(embeddings()),
-                  run_config=RunConfig(timeout=600, max_workers=4)).to_pandas()  # 2.5 Pro is slow; avoid NaN timeouts
-    df["type"] = [o["type"] for _, o in answerable]
-    names = [m.name for m in METRICS]
-
-    # faithfulness only checks claims against the passages, so a vague or "not found" answer can score high;
-    # correctness checks the answer actually matches the reference
-    df["correct"] = [float(judge_yes(judge_llm, CORRECT.format(q=t["question"], ref=t["ground_truth"], a=o["answer"])))
-                     for t, o in answerable]
-    names.append("correct")
-    abstained = {}
-    for t, o in zip(tests, runs):
-        if o["type"] == "unanswerable":
-            abstained[id(o)] = judge_yes(judge_llm, ABSTAIN.format(q=t["question"], a=o["answer"]))
+        kind = t.get("type", "direct")
+        before = cost_of(judge_usage.usage_metadata)
+        cfg = {"callbacks": [judge_usage]}
+        if kind == "unanswerable":
+            reply = text(judge.invoke(ABSTAIN.format(q=t["question"], a=out["answer"]), config=cfg))
+            row = {"abstained": reply.strip().lower().startswith("yes")}
+        else:
+            # passages exactly as the generator saw them, source label included
+            ctx = "\n\n".join(f"({label(d)})\n{d.page_content}" for d in out["docs"]) or "(none)"
+            row = verdict(text(judge.invoke(JUDGE.format(q=t["question"], ref=t["ground_truth"], ctx=ctx,
+                                                         a=out["answer"]), config=cfg)))
+        judge_cost = cost_of(judge_usage.usage_metadata) - before
+        charge(judge_cost)  # the agent run charged itself; the judge goes on the same monthly ledger
+        run_cost = cost_of(out["usage"]["by_model"])
+        spent += run_cost + judge_cost
+        row.update(type=kind, question=t["question"], answer=out["answer"], attempts=out["attempts"],
+                   seconds=out["seconds"], cost_usd=round(run_cost, 6), trace_id=out.get("trace_id"),
+                   contexts=[d.page_content for d in out["docs"]])
+        print(f"[{i}/{len(tests)}] {kind:<12} attempts={out['attempts']} "
+              f"{ {k: row[k] for k in ('correct', 'supported', 'retrieved', 'abstained') if k in row} } "
+              f"{t['question'][:50]}")
+        rows.append(row)
 
     if tracing():
         from langfuse import get_client
         lf = get_client()
-        for (_, out), (_, row) in zip(answerable, df.iterrows()):
-            for n in names:
-                if out["trace_id"] and row[n] == row[n]:  # skip NaN
-                    lf.create_score(trace_id=out["trace_id"], name=n, value=float(row[n]))
-        for out in runs:
-            if id(out) in abstained and out["trace_id"]:
-                lf.create_score(trace_id=out["trace_id"], name="abstained", value=float(abstained[id(out)]))
+        for r in rows:
+            for k in ("correct", "supported", "retrieved", "abstained"):
+                if k in r and r["trace_id"]:
+                    lf.create_score(trace_id=r["trace_id"], name=k, value=float(r[k]))
         flush()
+    return summarize(rows, spent), rows
 
-    print(df[["type", "user_input", *names]].to_string(max_colwidth=45))
-    details = df[["type", "user_input", "response", *names]].assign(retrieved_contexts=df["retrieved_contexts"])
-    Path(f"eval_details_{'baseline' if baseline else 'agentic'}.json").write_text(
-        details.to_json(orient="records", indent=1, force_ascii=False), encoding="utf-8")  # per-question, for debugging
-    summary = {n: round(float(df[n].mean()), 3) for n in names}
+
+def summarize(rows: list[dict], spent: float) -> dict:
+    mean = lambda xs: round(sum(xs) / len(xs), 3) if xs else None  # noqa: E731
+    answerable = [r for r in rows if r["type"] != "unanswerable"]
+    summary = {k: mean([r[k] for r in answerable]) for k in ("correct", "supported", "retrieved")}
     for kind in ("direct", "vague", "messy"):
-        part = df[df["type"] == kind]
-        for n in ("faithfulness", "context_recall", "correct"):
-            if len(part):
-                summary[f"{n} [{kind}]"] = round(float(part[n].mean()), 3)
-    summary["abstention_rate [unanswerable]"] = round(sum(abstained.values()) / len(abstained), 3) if abstained else None
-    summary["rewrite_rate"] = round(sum(o["attempts"] > 0 for o in runs) / len(runs), 3)
-    summary["mean_attempts"] = round(sum(o["attempts"] for o in runs) / len(runs), 2)
-    summary["mean_seconds"] = round(sum(o["seconds"] for o in runs) / len(runs), 1)
-    costs = [o["usage"]["cost_usd"] for o in runs]
-    summary["mean_cost_usd"] = round(sum(costs) / len(costs), 5) if None not in costs else None
-    summary["n"] = len(runs)
+        part = [r for r in answerable if r["type"] == kind]
+        if part:
+            summary[f"correct [{kind}]"] = mean([r["correct"] for r in part])
+    summary["abstention_rate [unanswerable]"] = mean([r["abstained"] for r in rows if "abstained" in r])
+    summary["rewrite_rate"] = mean([r["attempts"] > 0 for r in rows])
+    summary["mean_seconds"] = round(sum(r["seconds"] for r in rows) / len(rows), 1) if rows else None
+    summary["mean_cost_usd"] = round(sum(r["cost_usd"] for r in rows) / len(rows), 5) if rows else None
+    summary["eval_cost_usd"] = round(spent, 4)
+    summary["n"] = len(rows)
     return summary
 
 
 def readme_table(before: dict, after: dict) -> str:
     lines = ["| Metric | Baseline (retrieve → generate) | Self-correcting agent | Δ |", "|---|---|---|---|"]
     for k in after:
-        if k == "n":
+        if k in ("n", "eval_cost_usd"):
             continue
         a, b = after[k], before.get(k)
         if None in (a, b):  # metric missing from an older run
@@ -131,24 +151,31 @@ def readme_table(before: dict, after: dict) -> str:
         else:
             lines.append(f"| {k} | {b:.4g} | {a:.4g} | {a - b:+.4g} |")
     lines.append(f"\n_{after['n']} questions from `testset.json` (direct, vague, messy scanned tables, unanswerable), "
-                 "judged by Ragas; unanswerable questions are scored on abstention instead._")
+                 f"graded by `{JUDGE_MODEL}` against reference answers; unanswerable questions are scored on "
+                 "abstention instead._")
     return "\n".join(lines)
 
 
 def main():
     baseline = "--baseline" in sys.argv
-    summary = evaluate_mode(baseline)
-    out_file = Path("scores_baseline.json" if baseline else "scores_agentic.json")
+    all_tests = json.loads(Path("testset.json").read_text(encoding="utf-8"))
+    tests = pick(all_tests, sys.argv)
+    summary, rows = evaluate_mode(baseline, tests)
+    mode = "baseline" if baseline else "agentic"
+    Path(f"eval_details_{mode}.json").write_text(json.dumps(rows, indent=1, ensure_ascii=False), encoding="utf-8")
+    print(f"\n{mode}: {summary}")
+    if len(rows) < len(all_tests):
+        print("partial run: scores_*.json and README left unchanged")
+        return
+    out_file = Path(f"scores_{mode}.json")
     out_file.write_text(json.dumps(summary, indent=2))
-    print(f"\nmeans -> {out_file}: {summary}")
-
     a, b = Path("scores_agentic.json"), Path("scores_baseline.json")
     readme = Path("README.md")
     if a.exists() and b.exists() and readme.exists():
         table = readme_table(json.loads(b.read_text()), json.loads(a.read_text()))
-        text = re.sub(r"(<!-- scores:start -->).*?(<!-- scores:end -->)",
-                      lambda m: f"{m[1]}\n{table}\n{m[2]}", readme.read_text(encoding="utf-8"), flags=re.S)
-        readme.write_text(text, encoding="utf-8")
+        text_ = re.sub(r"(<!-- scores:start -->).*?(<!-- scores:end -->)",
+                       lambda m: f"{m[1]}\n{table}\n{m[2]}", readme.read_text(encoding="utf-8"), flags=re.S)
+        readme.write_text(text_, encoding="utf-8")
         print("README.md score table updated")
 
 
