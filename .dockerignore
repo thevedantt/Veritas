@@ -1,0 +1,10 @@
+.git
+.venv
+.env
+qdrant_data
+uploads
+state
+spend.json
+__pycache__
+*.log
+eval_details_*.json

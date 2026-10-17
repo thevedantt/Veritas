@@ -165,7 +165,8 @@ def store():
     from langchain_qdrant import QdrantVectorStore, RetrievalMode
     return QdrantVectorStore.construct_instance(
         embedding=embeddings(), sparse_embedding=sparse_embeddings(), retrieval_mode=RetrievalMode.HYBRID,
-        collection_name=COLLECTION, client_options={"path": QDRANT_PATH})
+        collection_name=COLLECTION, client_options={"path": QDRANT_PATH},
+        validate_collection_config=False)  # skips a billed "dummy" embedding call on every start
 
 
 def label(d: Document) -> str:
