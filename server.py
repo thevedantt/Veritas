@@ -5,6 +5,8 @@ POST   /api/ask              {"question", "self_correct"} -> answer, sources, re
 POST   /api/ask/stream       same request; server-sent events: steps, answer tokens, then the result
 POST   /api/upload?name=...  raw file bytes -> queued for parsing + indexing in the background
 GET    /api/library          indexed documents + in-progress uploads
+GET    /api/stats            AI spend this month and the monthly cap
+GET    /api/health           liveness check for deploys
 DELETE /api/documents/<id>   remove a document's chunks
 """
 import hashlib
@@ -13,19 +15,39 @@ import os
 import queue
 import re
 import threading
+import time
 import traceback
+from collections import defaultdict, deque
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlsplit
 
-from agent import BudgetExceeded, build, flush, run, store, stream, tracing
+from agent import MONTHLY_BUDGET_USD, BudgetExceeded, build, flush, run, spent, store, stream, tracing
 from cache import ANSWER_TTL, cache, library_version
 from ingest import SUPPORTED, add, chunk_batches, delete, doc_id, exists, list_documents
 
 MAX_UPLOAD = 50 * 1024 * 1024
 UPLOADS = Path("uploads")
 UPLOADS.mkdir(exist_ok=True)
+# per-client limits, so a public demo can't be scripted into the monthly budget: (requests, window seconds)
+LIMITS = {"ask": (20, 60), "upload": (10, 3600)}
+_hits: dict[tuple[str, str], deque] = defaultdict(deque)
+_hits_lock = threading.Lock()
+
+
+def allow(client: str, kind: str) -> bool:
+    """Sliding-window rate limit. ponytail: in-process; move to Redis with several server processes."""
+    limit, window = LIMITS[kind]
+    now = time.monotonic()
+    with _hits_lock:
+        q = _hits[(client, kind)]
+        while q and now - q[0] > window:
+            q.popleft()
+        if len(q) >= limit:
+            return False
+        q.append(now)
+        return True
 
 vs = store()  # embedded Qdrant allows one client per process; everything shares it under agent.DB_LOCK
 GRAPHS = {True: build(vs=vs), False: build(max_attempts=0, vs=vs)}
@@ -38,7 +60,7 @@ def worker():
     while True:
         job, data = QUEUE.get()
         try:
-            job["status"] = "parsing"
+            job.update(status="parsing", started=time.time())
             for docs, done, total in chunk_batches(job["name"], data):  # pages become searchable batch by batch
                 if docs:
                     add(vs, docs)
@@ -49,9 +71,9 @@ def worker():
             job["status"] = "done"
         except ValueError as e:
             job.update(status="error", error=str(e))
-        except Exception:
+        except Exception as e:
             traceback.print_exc()
-            job.update(status="error", error="could not process this file; see server log")
+            job.update(status="error", error=cloud_problem(e) or "could not process this file; see server log")
 
 
 threading.Thread(target=worker, daemon=True).start()
@@ -72,7 +94,15 @@ class Handler(SimpleHTTPRequestHandler):
         self.wfile.write(data)
 
     def do_GET(self):
-        if urlsplit(self.path).path == "/api/library":
+        path = urlsplit(self.path).path
+        if path in ("/veritas", "/veritas/"):  # about page
+            self.path = "/veritas.html"
+            return super().do_GET()
+        if path == "/api/health":
+            return self.send_json(200, {"ok": True})
+        if path == "/api/stats":
+            return self.send_json(200, {"spent_usd": round(spent(), 4), "budget_usd": MONTHLY_BUDGET_USD})
+        if path == "/api/library":
             active = [j for j in JOBS.values() if j["status"] != "done"]
             return self.send_json(200, {"documents": list_documents(vs), "jobs": active})
         if self.path.startswith("/api/"):
@@ -93,6 +123,10 @@ class Handler(SimpleHTTPRequestHandler):
 
     def do_POST(self):
         path = urlsplit(self.path).path
+        kind = {"/api/ask": "ask", "/api/ask/stream": "ask", "/api/upload": "upload"}.get(path)
+        if kind and not allow(self.client_address[0], kind):
+            self.close_connection = True
+            return self.send_json(429, {"error": "too many requests; wait a minute and try again"})
         if path == "/api/ask":
             return self.ask()
         if path == "/api/ask/stream":
@@ -142,14 +176,15 @@ class Handler(SimpleHTTPRequestHandler):
             return
         key = answer_key(*parsed)
         if cached := cache.get(key):
-            return self.send_json(200, {**cached, "cached": True})
+            return self.send_json(200, {**cached, "cached": True, "seconds": 0})
+        start = time.perf_counter()
         try:
             out = run(GRAPHS[parsed[1]], parsed[0])
             flush()
         except Exception as e:
             traceback.print_exc()
             return self.send_json(*failure(e))
-        result = payload(out)
+        result = payload(out, time.perf_counter() - start)
         remember(key, result)
         self.send_json(200, result)
 
@@ -170,11 +205,12 @@ class Handler(SimpleHTTPRequestHandler):
         key = answer_key(*parsed)
         try:
             if cached := cache.get(key):
-                return emit({"type": "done", "result": {**cached, "cached": True}})
+                return emit({"type": "done", "result": {**cached, "cached": True, "seconds": 0}})
+            start = time.perf_counter()
             for event in stream(GRAPHS[parsed[1]], parsed[0]):
                 if event["type"] == "done":
                     flush()
-                    result = payload(event["result"])
+                    result = payload(event["result"], time.perf_counter() - start)
                     remember(key, result)
                     emit({"type": "done", "result": result})
                 else:
@@ -201,7 +237,21 @@ def remember(key: str, result: dict):
         cache.set(key, result, ANSWER_TTL)
 
 
+def cloud_problem(e: Exception) -> str | None:
+    """Plain-language message for Google Cloud setup errors (API disabled, missing role, bad key)."""
+    msg = str(e)
+    if "SERVICE_DISABLED" in msg or "has not been used in project" in msg:
+        return "the Vertex AI API is disabled in the Google Cloud project; enable it, then retry"
+    if "PERMISSION_DENIED" in msg or "403" in msg:
+        return "the service account lacks permission; give it the Vertex AI User role"
+    if "DefaultCredentialsError" in type(e).__name__ or "credentials" in msg.lower():
+        return "Google Cloud credentials not found; check GOOGLE_APPLICATION_CREDENTIALS"
+    return None
+
+
 def failure(e: Exception) -> tuple[int, dict]:
+    if problem := cloud_problem(e):
+        return 503, {"error": problem}
     if isinstance(e, BudgetExceeded):
         return 503, {"error": f"{e}; answers resume next month (cached answers still work)"}
     if "429" in str(e) or "timed out" in str(e).lower() or "Timeout" in type(e).__name__:
@@ -209,7 +259,7 @@ def failure(e: Exception) -> tuple[int, dict]:
     return 500, {"error": "the agent failed; see server log"}
 
 
-def payload(out: dict) -> dict:
+def payload(out: dict, seconds: float) -> dict:
     trace_url = None
     if out.get("trace_id") and tracing():
         from langfuse import get_client
@@ -222,11 +272,13 @@ def payload(out: dict) -> dict:
         "trace_url": trace_url,
         "usage": {k: v for k, v in out["usage"].items() if k != "by_model"},
         "cached": False,
+        "seconds": round(seconds, 1),
         "sources": [{"source": d.metadata.get("source"), "page": d.metadata.get("page"),
                      "headings": d.metadata.get("headings"), "text": d.page_content} for d in out["docs"]],
     }
 
 
 if __name__ == "__main__":
-    print("Veritas running at http://localhost:8000")
-    ThreadingHTTPServer(("127.0.0.1", 8000), partial(Handler, directory="web")).serve_forever()
+    host = os.getenv("HOST", "127.0.0.1")  # 0.0.0.0 inside a container; put TLS (e.g. Caddy) in front publicly
+    print(f"Veritas running at http://localhost:8000 (listening on {host})")
+    ThreadingHTTPServer((host, 8000), partial(Handler, directory="web")).serve_forever()

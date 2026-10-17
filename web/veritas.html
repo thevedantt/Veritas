@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>About Veritas</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body class="about-page">
+  <header class="top">
+    <a class="brand" href="/veritas" aria-current="page">
+      <span class="mark" aria-hidden="true">V</span>
+      <div>
+        <h1>Veritas</h1>
+        <p>Answers checked against your documents</p>
+      </div>
+    </a>
+    <nav class="top-actions about-nav" aria-label="About page sections">
+      <a href="#how">How it works</a>
+      <a href="#production">Production</a>
+      <a href="#tradeoffs">Tradeoffs</a>
+      <a class="session-btn" href="/">Open the app →</a>
+    </nav>
+  </header>
+
+  <main class="about">
+    <section class="hero">
+      <div class="hero-text">
+        <p class="eyebrow">Self-correcting document Q&amp;A</p>
+        <h2>Answers from your documents, cited and checked before you see them.</h2>
+        <p class="lead">Veritas reads messy PDFs, Word files, slides, spreadsheets and scans, keeps tables intact, and
+          answers with page-level citations. When the passages don't hold the answer it searches again; when an
+          answer isn't supported, it says so instead of guessing.</p>
+        <div class="hero-actions">
+          <a class="primary-link" href="/">Try it</a>
+          <a class="ghost-link" href="#how">How it works</a>
+        </div>
+      </div>
+
+      <figure class="preview" aria-label="Example answer">
+        <div class="preview-q">What discount applies to an order of 60 robots?</div>
+        <div class="preview-steps">
+          <span>Found 10 passages, kept the best 5</span>
+          <span>Answer is supported by the sources</span>
+        </div>
+        <div class="msg bot preview-a">
+          <div class="answer">Orders of 50 to 99 units in a single purchase order get a 10% discount on the list price (kestrel_annual_report_2025.pdf p.16).</div>
+          <div class="meta">
+            <span class="badge good">Grounded</span>
+            <span class="badge">No rewrites</span>
+            <span class="badge">3.9s</span>
+            <span class="badge">2,840 tokens · $0.0006</span>
+          </div>
+          <div class="preview-src">Sources (5) · Pricing and volume discounts, p.16</div>
+        </div>
+        <figcaption>Illustrative answer on the bundled demo report.</figcaption>
+      </figure>
+    </section>
+
+    <section class="kpis" aria-label="Measured results">
+      <div class="kpi"><span class="kpi-v">25–26 / 30</span><span class="kpi-k">correct on the test set, and every unanswerable question answered "not found"</span></div>
+      <div class="kpi"><span class="kpi-v">~2 s</span><span class="kpi-k">to the first word; ~4–5 s for a fully checked answer</span></div>
+      <div class="kpi"><span class="kpi-v">&lt; $0.001</span><span class="kpi-k">per question; repeated questions are free from cache</span></div>
+      <div class="kpi"><span class="kpi-v">$5 / month</span><span class="kpi-k">hard AI budget, enforced in the app with a spend ledger</span></div>
+    </section>
+
+    <section class="block" id="how">
+      <header class="block-head"><span class="num">01</span><h3>How it works</h3></header>
+      <div class="split">
+        <ol class="steps">
+          <li><strong>Parse</strong><span>Docling reads layout and tables locally. Every table chunk repeats its
+            header and section label, so a row keeps its meaning. Scanned pages go to a vision model.</span></li>
+          <li><strong>Search</strong><span>Meaning-based and keyword search run in parallel, are fused, then
+            reranked by a local cross-encoder. The best 5 passages are kept.</span></li>
+          <li><strong>Answer</strong><span>The generator answers only from those passages and cites each claim
+            by file and page. A partial answer names what is missing.</span></li>
+          <li><strong>Correct itself</strong><span>Nothing relevant: rewrite into 3 searches. Part missing: search
+            for exactly that part. Up to 2 rounds.</span></li>
+          <li><strong>Check</strong><span>A second model verifies every claim against the passages. Unsupported
+            answers trigger another search; out of retries, Veritas says it couldn't find it.</span></li>
+        </ol>
+        <div class="graph-card">
+          <p class="graph-title">Agent graph (LangGraph)</p>
+          <pre class="graph">retrieve ─► generate ─(answered)─► check ─(grounded)─► answer
+   ▲           │                      │
+   │      not found /           not grounded
+   │        partial                   │
+   └──────── rewrite ◄────────────────┘</pre>
+          <dl class="facts">
+            <div><dt>Passages kept</dt><dd>5 of 10, reranked</dd></div>
+            <div><dt>Retry rounds</dt><dd>up to 2</dd></div>
+            <div><dt>Generator</dt><dd>Gemini 2.5 Flash</dd></div>
+            <div><dt>Checker</dt><dd>Gemini 2.5 Flash-Lite</dd></div>
+          </dl>
+        </div>
+      </div>
+    </section>
+
+    <section class="block" id="production">
+      <header class="block-head"><span class="num">02</span><h3>Built like a production system</h3></header>
+      <div class="cards">
+        <article class="card"><h4>Cost</h4><p>Cheap models with thinking off, answer and embedding caches, a monthly
+          spend ledger with a hard cap, capped vision pages, evals that stop at $1.</p></article>
+        <article class="card"><h4>Latency</h4><p>Streamed answers, parallel searches, a local reranker, and a
+          fallback model with a circuit breaker, so one slow call doesn't slow every answer.</p></article>
+        <article class="card"><h4>Accuracy</h4><p>Hybrid search, table-aware chunking, vision for scans, targeted
+          retries, a second-model grounding check, and "not found" instead of guessing.</p></article>
+        <article class="card"><h4>Safety &amp; operations</h4><p>Per-client rate limits, upload limits and dedupe,
+          no HTML from documents, health and spend endpoints, Langfuse traces, a scored test set.</p></article>
+      </div>
+    </section>
+
+    <section class="block" id="tradeoffs">
+      <header class="block-head"><span class="num">03</span><h3>Tradeoffs</h3></header>
+      <div class="split split-wide">
+        <div class="table-wrap">
+          <table class="turns">
+            <thead><tr><th>Choice</th><th>Gain</th><th>Cost</th></tr></thead>
+            <tbody>
+              <tr><td>2.5 Flash writes, Flash-Lite checks</td><td>Half the price of 3.x Flash, stable</td><td>3.7 Flash got 2 more of 30 right</td></tr>
+              <tr><td>Thinking off</td><td>Faster, no billed reasoning tokens</td><td>Weaker multi-step table reasoning</td></tr>
+              <tr><td>Self-correcting agent</td><td>Grounding check and retries</td><td>~3 s slower than plain retrieval</td></tr>
+              <tr><td>Vision model for scans</td><td>Correct cells on noisy scans</td><td>~$0.005 per page, max 10 per document</td></tr>
+              <tr><td>Embedded vector DB, in-process cache</td><td>Zero infrastructure</td><td>One server process until scaled out</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="side">
+          <h4>Stack</h4>
+          <ul class="chips">
+            <li>Docling</li><li>Qdrant hybrid</li><li>LangGraph</li><li>Gemini · Vertex AI</li>
+            <li>text-embedding-005</li><li>BM25</li><li>Jina reranker</li><li>Langfuse</li><li>Docker Compose</li>
+          </ul>
+          <h4>Known limits</h4>
+          <ul class="plain">
+            <li>One upload parses at a time; a 300-page book takes ~25 min on a laptop CPU, searchable as it goes.</li>
+            <li>Single user: no sign-in or per-user spaces yet.</li>
+            <li>33-question test set: one answer ≈ 3 points.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <footer class="about-foot">
+      <a href="/">← Back to the app</a>
+      <span>Veritas · a side project</span>
+    </footer>
+  </main>
+</body>
+</html>

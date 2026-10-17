@@ -4,23 +4,29 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Veritas</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <header class="top">
-    <div class="brand">
+    <a class="brand" href="/veritas" title="About Veritas">
       <span class="mark" aria-hidden="true">V</span>
       <div>
         <h1>Veritas</h1>
         <p>Answers checked against your documents</p>
       </div>
-    </div>
+    </a>
     <div class="top-actions">
       <label class="toggle">
         <input type="checkbox" id="selfCorrect" checked>
         <span class="track" aria-hidden="true"><span class="thumb"></span></span>
         <span class="toggle-label">Self-correction</span>
       </label>
+      <button type="button" class="session-btn" id="sessionBtn" aria-controls="session" aria-expanded="false">
+        End session <span id="turnCount" class="count">0</span>
+      </button>
       <button type="button" class="library-btn" id="libraryBtn" aria-controls="library" aria-expanded="false">
         Library <span id="docCount" class="count">0</span>
       </button>
@@ -39,6 +45,7 @@
       <h2 class="lib-title">Documents</h2>
       <ul class="docs" id="docs"></ul>
       <p class="lib-empty" id="libEmpty">No documents yet.</p>
+      <p class="spend" id="spend" aria-live="polite"></p>
     </aside>
 
     <section class="chat">
@@ -57,6 +64,32 @@
       </form>
     </section>
   </div>
+
+  <aside class="session" id="session" aria-label="Session report" hidden>
+    <div class="session-head">
+      <div>
+        <h2>Session report</h2>
+        <p>Every question asked this session: speed, cost and whether the answer was grounded.</p>
+      </div>
+      <button type="button" class="icon-btn" id="sessionClose" aria-label="Close session report">×</button>
+    </div>
+    <div class="stats" id="stats"></div>
+    <div class="turns-wrap">
+      <table class="turns">
+        <thead>
+          <tr><th>#</th><th>Question</th><th>Time</th><th>Cost</th><th>Tokens</th><th>Grounded</th><th>Rewrites</th><th>Sources</th></tr>
+        </thead>
+        <tbody id="turns"></tbody>
+      </table>
+      <p class="lib-empty" id="turnsEmpty">No questions yet.</p>
+    </div>
+    <p class="session-note">Grounded = a second model checked every claim against the cited passages (self-correction
+      on). Cost is estimated from token usage at list prices; cached answers cost $0.</p>
+    <div class="session-actions">
+      <button type="button" class="ghost" id="csvBtn">Download CSV</button>
+      <button type="button" class="primary" id="newSession">New session</button>
+    </div>
+  </aside>
 
   <template id="answerTpl">
     <article class="msg bot">

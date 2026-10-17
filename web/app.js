@@ -47,6 +47,20 @@ function updateComposer() {
   input.placeholder = ready ? "Ask a question…" : "Upload a document first";
 }
 
+// time left for an upload, from its pace so far
+function eta(j) {
+  if (!j.started || !j.pages_done || j.pages_done >= j.pages_total) return "";
+  const left = (Date.now() / 1000 - j.started) / j.pages_done * (j.pages_total - j.pages_done);
+  return left < 60 ? " · under a minute left" : ` · about ${Math.round(left / 60)} min left`;
+}
+
+async function refreshStats() {
+  try {
+    const s = await (await fetch("/api/stats")).json();
+    $("spend").textContent = `AI spend this month: $${s.spent_usd.toFixed(2)} of $${s.budget_usd.toFixed(0)}`;
+  } catch { /* stats are informational */ }
+}
+
 function renderJobs(jobs) {
   const list = $("jobs");
   list.replaceChildren();
@@ -55,7 +69,7 @@ function renderJobs(jobs) {
     const li = el("li", `job ${j.status === "error" ? "error" : ""}`);
     if (ACTIVE.has(j.status)) li.append(el("span", "spin"));
     li.append(el("span", "name", j.name));
-    const progress = j.pages_total ? `${j.pages_done ?? 0}/${j.pages_total} pages · searchable as it goes` : null;
+    const progress = j.pages_total ? `${j.pages_done ?? 0}/${j.pages_total} pages${eta(j)} · searchable as it goes` : null;
     li.append(el("span", "state", j.status === "error" ? j.error : (j.status === "parsing" && progress) || STATE_TEXT[j.status] || j.status));
     if (j.status === "error") {
       const close = el("button", "icon-btn", "×");
@@ -137,6 +151,93 @@ $("fileInput").addEventListener("change", e => { uploadFiles([...e.target.files]
 ["dragleave", "drop"].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.remove("over"); }));
 drop.addEventListener("drop", e => uploadFiles([...e.dataTransfer.files]));
 
+/* ---------- session report ---------- */
+
+// One row per question this session; kept in sessionStorage so a refresh doesn't lose it (per-tab only).
+const turns = (() => {
+  try { return JSON.parse(sessionStorage.getItem("veritas-turns")) || []; } catch { return []; }
+})();
+const sessionPanel = $("session");
+const sessionBtn = $("sessionBtn");
+
+function logTurn(question, r, error) {
+  turns.push(r ? {
+    question, seconds: r.seconds ?? 0, cost: r.cached ? 0 : r.usage?.cost_usd ?? null,
+    tokens: r.cached ? 0 : (r.usage ? r.usage.input_tokens + r.usage.output_tokens : null),
+    grounded: r.grounded, rewrites: r.attempts, sources: r.sources.length, cached: !!r.cached,
+    notFound: !r.sources.length || /couldn't find this/i.test(r.answer),
+  } : { question, error });
+  try { sessionStorage.setItem("veritas-turns", JSON.stringify(turns)); } catch { /* storage unavailable */ }
+  renderSession();
+}
+
+const fmtCost = c => (c == null ? "–" : c === 0 ? "$0" : `$${c < 0.01 ? c.toFixed(4) : c.toFixed(3)}`);
+
+function renderSession() {
+  $("turnCount").textContent = turns.length;
+  const ok = turns.filter(t => !t.error);
+  const live = ok.filter(t => !t.cached);
+  const checked = ok.filter(t => t.grounded != null);
+  const total = ok.reduce((s, t) => s + (t.cost || 0), 0);
+  const avg = live.length ? live.reduce((s, t) => s + t.seconds, 0) / live.length : 0;
+  const stats = [
+    ["Questions", turns.length],
+    ["Avg time", live.length ? `${avg.toFixed(1)}s` : "–"],
+    ["Slowest", live.length ? `${Math.max(...live.map(t => t.seconds)).toFixed(1)}s` : "–"],
+    ["Total cost", fmtCost(total)],
+    ["Grounded", checked.length ? `${checked.filter(t => t.grounded).length}/${checked.length}` : "–"],
+    ["Cache hits", ok.filter(t => t.cached).length],
+    ["Rewrites", ok.reduce((s, t) => s + (t.rewrites || 0), 0)],
+    ["Errors", turns.length - ok.length],
+  ];
+  $("stats").replaceChildren(...stats.map(([k, v]) => {
+    const box = el("div", "stat");
+    box.append(el("span", "stat-v", String(v)), el("span", "stat-k", k));
+    return box;
+  }));
+  $("turns").replaceChildren(...turns.map((t, i) => {
+    const tr = el("tr", t.error ? "err" : "");
+    const q = el("td", "q", t.question);
+    q.title = t.error ? `${t.question}\n\nError: ${t.error}` : t.question;
+    const cells = t.error
+      ? [el("td", null, String(i + 1)), q, Object.assign(el("td", "err-cell", `Error: ${t.error}`), { colSpan: 6 })]
+      : [el("td", null, String(i + 1)), q, el("td", null, t.cached ? "cached" : `${t.seconds.toFixed(1)}s`),
+         el("td", null, fmtCost(t.cost)), el("td", null, t.tokens == null ? "–" : t.tokens.toLocaleString()),
+         el("td", t.grounded == null ? "" : t.grounded ? "yes" : "no",
+            t.grounded == null ? (t.notFound ? "not found" : "–") : t.grounded ? "✓" : "✗"),
+         el("td", null, String(t.rewrites)), el("td", null, String(t.sources))];
+    tr.append(...cells);
+    return tr;
+  }));
+  $("turnsEmpty").hidden = turns.length > 0;
+}
+
+function toggleSession(open) {
+  sessionPanel.hidden = !open;
+  sessionBtn.setAttribute("aria-expanded", open);
+  if (open) $("sessionClose").focus();
+}
+sessionBtn.addEventListener("click", () => toggleSession(sessionPanel.hidden));
+$("sessionClose").addEventListener("click", () => toggleSession(false));
+document.addEventListener("keydown", e => { if (e.key === "Escape" && !sessionPanel.hidden) toggleSession(false); });
+
+$("csvBtn").addEventListener("click", () => {
+  const cols = ["question", "seconds", "cost", "tokens", "grounded", "rewrites", "sources", "cached", "error"];
+  const esc = v => `"${String(v ?? "").replaceAll('"', '""')}"`;
+  const csv = [cols.join(","), ...turns.map(t => cols.map(c => esc(t[c])).join(","))].join("\n");
+  const a = el("a");
+  a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+  a.download = `veritas-session-${new Date().toISOString().slice(0, 16).replace(":", "")}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+});
+
+$("newSession").addEventListener("click", () => {
+  if (turns.length && !confirm("Clear this session's chat and report?")) return;
+  try { sessionStorage.removeItem("veritas-turns"); } catch { /* storage unavailable */ }
+  location.reload(); // fresh chat, empty report; the library is server-side and stays
+});
+
 const libraryBtn = $("libraryBtn");
 libraryBtn.addEventListener("click", () => {
   const open = document.body.classList.toggle("show-library");
@@ -170,6 +271,7 @@ function renderAnswer(data) {
   }
   meta.append(el("span", "badge", data.attempts ? `${data.attempts} rewrite${data.attempts > 1 ? "s" : ""}` : "No rewrites"));
   if (data.cached) meta.append(el("span", "badge good", "Cached · no model calls"));
+  else if (data.seconds != null) meta.append(el("span", "badge", `${data.seconds.toFixed(1)}s`));
   const u = data.usage;
   if (u && !data.cached) {
     const tokens = (u.input_tokens + u.output_tokens).toLocaleString();
@@ -274,6 +376,7 @@ async function ask(question) {
       } else if (e.type === "done") {
         answer?.remove();
         live.replaceWith(renderAnswer(e.result));
+        logTurn(question, e.result);
         finished = true;
       } else if (e.type === "error") {
         throw new Error(e.error);
@@ -283,8 +386,10 @@ async function ask(question) {
   } catch (err) {
     answer?.remove();
     live.replaceWith(el("article", "msg bot error", `Something went wrong: ${err.message}`));
+    logTurn(question, null, err.message);
   } finally {
     busy = false;
+    refreshStats();
     updateComposer();
     input.focus();
     scrollDown();
@@ -313,3 +418,5 @@ input.addEventListener("input", () => {
 });
 
 refreshLibrary();
+refreshStats();
+renderSession();
