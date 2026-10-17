@@ -10,7 +10,7 @@ against a fixed test set.
 | Dense + sparse retrieval, RRF fusion | Qdrant (embedded) via `langchain-qdrant`, Vertex `text-embedding-005` + BM25 | `ingest.py`, `agent.py` |
 | Agent loop | LangGraph | `agent.py` |
 | LLMs | Gemini (or Claude) on Vertex AI: separate generator, critic and judge models | `agent.py:llm()` |
-| Quality scores | Ragas | `eval.py`, `testset.json` |
+| Quality scores | One LLM-judge call per question against reference answers | `eval.py`, `testset.json` |
 | Tracing | Langfuse | `agent.py:run()` |
 | Web app: upload, library, chat | Python `http.server` + HTML/CSS/JS | `server.py`, `web/` |
 
@@ -46,7 +46,23 @@ between rows, while the vision model read every checked cell correctly. Other sc
 
 **Models:** generator `gemini-2.5-flash`, critic (rewrite, grounding check) `gemini-2.5-flash-lite`, both with
 thinking off. If the generator stalls for `PRIMARY_TIMEOUT` seconds or errors, `FALLBACK_MODEL` answers and
-the generator is skipped for 2 minutes, so an outage costs one slow answer, not every answer.
+the generator is skipped for `PRIMARY_COOLDOWN` seconds (30), so an outage costs one slow answer, not every
+answer.
+
+## Cost controls
+
+- **Monthly cap:** `MONTHLY_BUDGET_USD` (default $5). Every model call's token usage is priced and added to
+  `spend.json`; once the month's total reaches the cap, chat returns "monthly AI budget reached" (cached
+  answers still work) and scanned pages fall back to free local OCR. Unknown models are priced high so the
+  cap never undercounts. Set a GCP budget alert as well: the app only sees its own calls.
+- **Per question:** about $0.0005-0.001 (generator `gemini-2.5-flash`, critic `gemini-2.5-flash-lite`,
+  thinking off, 5 passages). Repeated questions are answered from cache for $0.
+- **Uploads:** digital pages parse locally for $0. Scanned pages cost about $0.005 each, at most
+  `SCAN_MAX_PAGES` (10) per document; the rest use Docling OCR.
+- **Evals:** `eval.py` uses one `gemini-2.5-flash-lite` judge call per question and stops at
+  `EVAL_BUDGET_USD` (default $1); a full 33-question run costs about $0.03-0.05. Use `--type` / `--limit`
+  to test a subset. (The earlier Ragas + `gemini-2.5-pro` judge made 10-20 billed thinking calls per
+  question and cost several dollars a run.)
 
 ## Setup
 
@@ -79,7 +95,7 @@ python test_ingest.py                        # table labels, OCR cleanup, scanne
 ```
 
 With Langfuse keys set, every run is a trace (retrieve, rewrite, generate, check spans plus each LLM
-call), and `eval.py` attaches the Ragas scores to each trace. Langfuse US-region accounts use
+call), and `eval.py` attaches its scores to each trace. Langfuse US-region accounts use
 `LANGFUSE_HOST=https://us.cloud.langfuse.com`.
 
 **Rate limits:** each question makes 2-8 model calls. When throttled (HTTP 429) each call is capped at 45 s
@@ -88,8 +104,9 @@ and retried, and the web app says the model is busy instead of hanging.
 ## Results: before / after
 
 Baseline = hybrid retrieve then generate. Agent = the full graph above. Same test set, same models,
-same judge. Generator `gemini-2.5-flash`, critic `gemini-2.5-flash-lite`, Ragas judge `gemini-2.5-pro`: no
-model scores its own output. The judge sees each passage with its source label, as the generator did.
+same judge. Generator `gemini-2.5-flash`, critic `gemini-2.5-flash-lite`. The table below was scored with
+the earlier Ragas + `gemini-2.5-pro` judge; `eval.py` now uses a single `gemini-2.5-flash-lite` call per
+question (correct / supported / retrieved), so the next run regenerates it with those metrics.
 
 <!-- scores:start -->
 | Metric | Baseline (retrieve → generate) | Self-correcting agent | Δ |
