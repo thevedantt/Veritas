@@ -16,7 +16,8 @@ from pathlib import Path
 from langchain_core.documents import Document
 from qdrant_client import models
 
-from agent import COLLECTION, DB_LOCK, LLM_ATTEMPTS, QDRANT_PATH, llm, store, text
+from agent import (COLLECTION, DB_LOCK, LLM_ATTEMPTS, MONTHLY_BUDGET_USD, QDRANT_PATH, charge, cost_of, llm,
+                   spent, store, text)
 from cache import library_changed
 
 HEADER_PART = 30  # max characters per header level of a table column, repeated in every chunk of the table
@@ -26,6 +27,7 @@ PAGE_BATCH = 4  # PDFs are parsed and indexed a few pages at a time, so early pa
 # table Docling's table recognizer shifted values between rows, while Gemini 2.5 Flash read every checked cell
 # right, at about $0.005 and 10 s per page. "off" falls back to Docling OCR.
 SCAN_MODEL = os.getenv("SCAN_MODEL", "gemini-2.5-flash")
+SCAN_MAX_PAGES = int(os.getenv("SCAN_MAX_PAGES", 10))  # per document; later scanned pages use Docling OCR (free)
 SCAN_PROMPT = """Transcribe this scanned document page to Markdown. Reproduce every table as a Markdown table with
 one table row per line and every cell in its own column, exactly as printed (do not merge rows, do not
 compute or skip anything). Use a single header row with exactly one cell per column. Make each header short
@@ -152,7 +154,9 @@ def chunk_batches(name: str, data: bytes):
     if not total:
         yield chunk(name, data), None, None
         return
-    scanned = scanned_pages(data) if SCAN_MODEL != "off" else set()
+    scanned = set()
+    if SCAN_MODEL != "off" and spent() < MONTHLY_BUDGET_USD:  # over budget: Docling OCR only
+        scanned = set(sorted(scanned_pages(data))[:SCAN_MAX_PAGES])
     for first in range(1, total + 1, PAGE_BATCH):
         last = min(first + PAGE_BATCH - 1, total)
         docs = []
@@ -181,8 +185,10 @@ def chunk_scan(name: str, data: bytes, page: int) -> list[Document]:
     image = "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
     model = llm(SCAN_MODEL, 0, timeout=180).with_retry(stop_after_attempt=LLM_ATTEMPTS + 1,
                                                        wait_exponential_jitter=True)  # 429s happen
-    md = text(model.invoke([HumanMessage(content=[{"type": "text", "text": SCAN_PROMPT},
-                                                  {"type": "image_url", "image_url": image}])]))
+    msg = model.invoke([HumanMessage(content=[{"type": "text", "text": SCAN_PROMPT},
+                                              {"type": "image_url", "image_url": image}])])
+    charge(cost_of({SCAN_MODEL: msg.usage_metadata or {}}))
+    md = text(msg)
     md = square_tables(md.strip().removeprefix("```markdown").removeprefix("```").removesuffix("```"))
     converter, _ = tools()
     dl = converter.convert(DocumentStream(name=f"{Path(name).stem}_p{page}.md", stream=BytesIO(md.encode()))).document

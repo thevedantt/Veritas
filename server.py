@@ -19,7 +19,7 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlsplit
 
-from agent import build, flush, run, store, stream, tracing
+from agent import BudgetExceeded, build, flush, run, store, stream, tracing
 from cache import ANSWER_TTL, cache, library_version
 from ingest import SUPPORTED, add, chunk_batches, delete, doc_id, exists, list_documents
 
@@ -202,6 +202,8 @@ def remember(key: str, result: dict):
 
 
 def failure(e: Exception) -> tuple[int, dict]:
+    if isinstance(e, BudgetExceeded):
+        return 503, {"error": f"{e}; answers resume next month (cached answers still work)"}
     if "429" in str(e) or "timed out" in str(e).lower() or "Timeout" in type(e).__name__:
         return 503, {"error": "the model service is busy (rate limit or timeout); try again in a minute"}
     return 500, {"error": "the agent failed; see server log"}

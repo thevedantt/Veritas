@@ -46,3 +46,22 @@ class FakeReranker:
 agent.RERANKER, agent._reranker = "fake", FakeReranker()
 assert [d.page_content for d in agent.rerank("q", [Document(page_content=str(i)) for i in range(7)], 3)] == ["2", "0", "1"]
 print("ok")
+
+# spend ledger: unknown models are charged high, and the cap trips once the month's spend reaches it
+import tempfile  # noqa: E402
+from pathlib import Path as _P  # noqa: E402
+
+agent.SPEND_FILE = _P(tempfile.mkdtemp()) / "spend.json"
+agent.MONTHLY_BUDGET_USD = 0.01
+assert agent.cost_of({"gemini-2.5-flash": {"input_tokens": 1_000_000, "total_tokens": 1_000_000}}) == 0.30
+assert agent.cost_of({"mystery-model": {"input_tokens": 0, "total_tokens": 1_000_000}}) == agent.UNKNOWN_PRICE[1]
+agent.check_budget()  # nothing spent yet
+agent.charge(0.004)
+agent.charge(0.007)
+assert abs(agent.spent() - 0.011) < 1e-9
+try:
+    agent.check_budget()
+    raise AssertionError("budget cap did not trip")
+except agent.BudgetExceeded:
+    pass
+print("ok")
