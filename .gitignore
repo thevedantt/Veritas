@@ -5,3 +5,4 @@ __pycache__/
 *.log
 uploads/
 eval_details_*.json
+spend.json
