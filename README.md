@@ -2,7 +2,17 @@
 
 Veritas is a RAG agent for messy PDFs with tables. It reranks what it retrieves, rewrites the search and retries
 when the passages don't hold the answer, checks that the answer is grounded, traces every step, and is scored
-against a fixed test set.
+against a fixed test set. It runs under a hard $5/month AI budget.
+
+**At a glance** (33-question test set over a research paper and a partly scanned IRS tax table PDF):
+
+| | Value |
+|---|---|
+| Correct answers | 25-26 of 30 answerable; 100% abstention on the 3 unanswerable questions |
+| Latency | first word ~1.5-2 s, full checked answer ~4-5 s; plain mode ~1-2 s; repeat questions instant |
+| Cost | ~$0.0005-0.001 per question; $0 for cached answers; ~$0.005 per scanned page at upload |
+| Upload | ~5 s per digital page on a laptop CPU; first pages searchable within ~30-40 s |
+| Budget | hard monthly cap (`MONTHLY_BUDGET_USD`, default $5), per-client rate limits |
 
 | Piece | Tool | File |
 |---|---|---|
@@ -14,7 +24,8 @@ against a fixed test set.
 | Tracing | Langfuse | `agent.py:run()` |
 | Web app: upload, library, chat | Python `http.server` + HTML/CSS/JS | `server.py`, `web/` |
 
-No Docker needed: Qdrant runs as a local folder (`qdrant_data/`), Langfuse uses the cloud tier.
+Runs locally with no Docker: Qdrant is a local folder (`qdrant_data/`), Langfuse uses the cloud tier. A
+`Dockerfile` + `docker-compose.yml` package it for a single VM (see Deploy).
 
 ## Agent graph
 
@@ -64,6 +75,48 @@ answer.
   to test a subset. (The earlier Ragas + `gemini-2.5-pro` judge made 10-20 billed thinking calls per
   question and cost several dollars a run.)
 
+## Production features
+
+- **Cost:** monthly spend cap with a ledger, cheap models with thinking off, answer + query-embedding caches,
+  scan-page cap, budget-capped evals (above).
+- **Latency:** streamed answers (SSE), parallel dense + sparse search, parallel rewritten queries, local
+  reranker (no API call), fallback model with a cooldown circuit breaker, pages indexed in batches during upload.
+- **Accuracy:** hybrid search + reranking, table-aware chunking, vision transcription for scanned pages,
+  targeted retry for partial answers, grounding check by a second model, "not found" instead of guessing.
+- **Safety:** per-client rate limits (20 questions/min, 10 uploads/hour), upload type whitelist and 50 MB
+  limit, content-hash dedupe, model and document text never rendered as HTML, secrets only in `.env`.
+- **Operations:** `/api/health`, `/api/stats` (spend vs cap), Langfuse traces with per-question scores,
+  offline unit checks, a reproducible eval with a before/after table.
+
+## Tradeoffs made
+
+| Choice | Gain | Cost |
+|---|---|---|
+| `gemini-2.5-flash` writes, `flash-lite` checks | ~half the price of 3.x Flash, stable | 3.7 Flash got 2 more of 30 right |
+| Thinking off everywhere | seconds faster, no billed reasoning tokens | weaker multi-step table reasoning |
+| Self-correcting agent vs plain retrieve-generate | grounding check, retries, partial-answer search | ~3 s slower per question |
+| Vision model for scanned pages | correct cells on noisy scans | ~$0.005/page, capped at 10 pages/doc |
+| Embedded Qdrant, in-process cache and rate limits | zero infrastructure | one server process; Qdrant server + Redis to scale out |
+| One cheap judge call per eval question | ~$0.04 per full eval (was several dollars) | coarser metrics than Ragas |
+
+## Deploy (single VM)
+
+```bash
+cp .env.example .env                  # fill in project, models, budget
+export GCP_KEY_FILE=/path/to/key.json # service account with the Vertex AI User role
+docker compose up -d --build          # http://<vm>:8000 ; put Caddy/nginx with TLS in front
+```
+
+Give the VM at least 4 GB RAM (parsing peaks around 1.5 GB). The Docker files have not been run yet: the dev
+machine has no Docker.
+
+## Known limits
+
+- One upload parses at a time; a 300-page book takes ~25 minutes on a laptop CPU (searchable as it goes).
+- Single-user: no sign-in or per-user document isolation yet; one server process.
+- The spend cap counts model tokens, not embeddings (cents per book).
+- Scores come from 33 questions: one answer is ~3 percentage points, so small differences are noise.
+
 ## Setup
 
 ```bash
@@ -83,6 +136,15 @@ Drop files onto the library panel to upload them: PDF, Word, PowerPoint, Excel, 
 images (scans are OCR'd), up to 50 MB each. Each upload is parsed and indexed in the background; the same
 file uploaded twice is detected by content hash and skipped. Remove a document from the library and its
 chunks leave the index. Answers cite the file (and page, when the format has pages).
+
+**Demo:** upload `data/kestrel_annual_report_2025.pdf`, a fictional 20-page annual report with KPI and
+financial tables, a multi-page product table, range-lookup tables and one image-only scanned page, and ask
+the questions in [`DEMO_QUESTIONS.md`](DEMO_QUESTIONS.md) (expected answers included). Rebuild it with
+`python scripts/make_demo_pdf.py` (`pip install reportlab`).
+
+**Session report:** *End session* opens a side panel listing every question of the session with its time,
+cost, tokens, grounding verdict, rewrites and sources, plus totals (average and slowest time, total cost,
+grounded share, cache hits), downloadable as CSV. It is kept per browser tab; no database is needed.
 
 ```bash
 python ingest.py data/                       # add a folder from the command line (already-indexed files skipped)

@@ -1,0 +1,16 @@
+# docker compose up -d  ->  http://<vm>:8000   (put Caddy/nginx with TLS in front for public access)
+# Needs .env (see .env.example) and GCP_KEY_FILE pointing at the service-account key on the VM.
+services:
+  veritas:
+    build: .
+    ports: ["8000:8000"]
+    env_file: .env
+    environment:
+      GOOGLE_APPLICATION_CREDENTIALS: /secrets/gcp-key.json
+    volumes:
+      - ./qdrant_data:/app/qdrant_data   # vector index
+      - ./uploads:/app/uploads           # original files
+      - ./state:/app/state               # spend.json (monthly cost ledger)
+      - ${GCP_KEY_FILE:?set GCP_KEY_FILE to the key path}:/secrets/gcp-key.json:ro
+    mem_limit: 4g                        # Docling parsing peaks around 1.5 GB
+    restart: unless-stopped
