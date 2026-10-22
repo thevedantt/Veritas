@@ -281,7 +281,10 @@ def main(args: list[str]):
     files = sorted(p for p in folder.iterdir() if p.suffix.lower() in SUPPORTED)
     if not files:
         sys.exit(f"no supported files in {folder} ({', '.join(sorted(SUPPORTED))})")
-    if "--reset" in args:
+    if "--reset" in args and os.getenv("QDRANT_URL"):  # Qdrant server: dropping the collection is enough
+        from qdrant_client import QdrantClient
+        QdrantClient(url=os.environ["QDRANT_URL"]).delete_collection(COLLECTION)
+    elif "--reset" in args:
         # delete the folder, not the collection: on Windows local Qdrant can't remove the locked
         # storage file, and a recreated collection silently reloads the old points
         from qdrant_client import QdrantClient

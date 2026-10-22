@@ -9,7 +9,9 @@ GET    /api/stats            AI spend this month and the monthly cap
 GET    /api/health           liveness check for deploys
 DELETE /api/documents/<id>   remove a document's chunks
 """
+import base64
 import hashlib
+import hmac
 import json
 import os
 import queue
@@ -23,11 +25,14 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlsplit
 
-from agent import MONTHLY_BUDGET_USD, BudgetExceeded, build, flush, run, spent, store, stream, tracing
+from agent import (MONTHLY_BUDGET_USD, BudgetExceeded, build, check_budget, flush, run, spent, standalone, store,
+                   stream, tracing)
 from cache import ANSWER_TTL, cache, library_version
 from ingest import SUPPORTED, add, chunk_batches, delete, doc_id, exists, list_documents
 
 MAX_UPLOAD = 50 * 1024 * 1024
+# Optional shared password (HTTP Basic auth, any username) for a public deployment; serve it behind TLS.
+APP_PASSWORD = os.getenv("APP_PASSWORD", "")
 UPLOADS = Path("uploads")
 UPLOADS.mkdir(exist_ok=True)
 # per-client limits, so a public demo can't be scripted into the monthly budget: (requests, window seconds)
@@ -85,6 +90,23 @@ def safe_name(raw: str) -> str:
 
 
 class Handler(SimpleHTTPRequestHandler):
+    def authorized(self) -> bool:
+        """With APP_PASSWORD set, every route except /api/health needs it; replies 401 otherwise."""
+        if not APP_PASSWORD or urlsplit(self.path).path == "/api/health":
+            return True
+        header = self.headers.get("Authorization", "")
+        try:
+            password = base64.b64decode(header.removeprefix("Basic ")).decode().partition(":")[2]
+        except ValueError:
+            password = ""
+        if header.startswith("Basic ") and hmac.compare_digest(password.encode(), APP_PASSWORD.encode()):
+            return True
+        self.send_response(401)
+        self.send_header("WWW-Authenticate", 'Basic realm="Veritas"')
+        self.send_header("Content-Length", "0")
+        self.end_headers()
+        return False
+
     def send_json(self, status: int, payload: dict):
         data = json.dumps(payload).encode()
         self.send_response(status)
@@ -94,6 +116,8 @@ class Handler(SimpleHTTPRequestHandler):
         self.wfile.write(data)
 
     def do_GET(self):
+        if not self.authorized():
+            return
         path = urlsplit(self.path).path
         if path in ("/veritas", "/veritas/"):  # about page
             self.path = "/veritas.html"
@@ -110,6 +134,8 @@ class Handler(SimpleHTTPRequestHandler):
         super().do_GET()
 
     def do_DELETE(self):
+        if not self.authorized():
+            return
         m = re.fullmatch(r"/api/documents/([0-9a-f]{16})", urlsplit(self.path).path)
         if not m:
             return self.send_json(404, {"error": "not found"})
@@ -122,6 +148,8 @@ class Handler(SimpleHTTPRequestHandler):
         self.send_json(200, {"deleted": did})
 
     def do_POST(self):
+        if not self.authorized():
+            return
         path = urlsplit(self.path).path
         kind = {"/api/ask": "ask", "/api/ask/stream": "ask", "/api/upload": "upload"}.get(path)
         if kind and not allow(self.client_address[0], kind):
@@ -157,7 +185,8 @@ class Handler(SimpleHTTPRequestHandler):
         self.send_json(202, job)
 
     def read_question(self):
-        """Parse and validate an ask request; returns (question, self_correct) or None after replying."""
+        """Parse and validate an ask request; returns (question, self_correct, history) or None after replying.
+        history: up to 3 earlier {"q", "a"} turns from this chat, for follow-up questions."""
         try:
             body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or b"{}")
         except (ValueError, json.JSONDecodeError):
@@ -167,19 +196,28 @@ class Handler(SimpleHTTPRequestHandler):
         if not question or len(question) > 2000:
             self.send_json(400, {"error": "question is required (max 2000 characters)"})
             return None
-        return question, bool(body.get("self_correct", True))
+        raw = body.get("history") or []
+        history = [{"q": str(t.get("q", ""))[:2000], "a": str(t.get("a", ""))[:4000]}
+                   for t in raw[-3:] if isinstance(t, dict)] if isinstance(raw, list) else []
+        return question, bool(body.get("self_correct", True)), history
+
+    def resolve(self, parsed) -> str:
+        """The question to answer: a follow-up rewritten to stand alone (after the budget check)."""
+        check_budget()
+        return standalone(parsed[0], parsed[2])
 
     def ask(self):
         """Blocking JSON answer (scripts, eval tooling). The web app uses /api/ask/stream."""
         parsed = self.read_question()
         if not parsed:
             return
-        key = answer_key(*parsed)
-        if cached := cache.get(key):
-            return self.send_json(200, {**cached, "cached": True, "seconds": 0})
         start = time.perf_counter()
         try:
-            out = run(GRAPHS[parsed[1]], parsed[0])
+            question = self.resolve(parsed)
+            key = answer_key(question, parsed[1])
+            if cached := cache.get(key):
+                return self.send_json(200, {**cached, "cached": True, "seconds": 0, "question": question})
+            out = run(GRAPHS[parsed[1]], question)
             flush()
         except Exception as e:
             traceback.print_exc()
@@ -202,12 +240,15 @@ class Handler(SimpleHTTPRequestHandler):
             self.wfile.write(f"data: {json.dumps(event)}\n\n".encode())
             self.wfile.flush()
 
-        key = answer_key(*parsed)
         try:
-            if cached := cache.get(key):
-                return emit({"type": "done", "result": {**cached, "cached": True, "seconds": 0}})
             start = time.perf_counter()
-            for event in stream(GRAPHS[parsed[1]], parsed[0]):
+            question = self.resolve(parsed)
+            if question != parsed[0]:
+                emit({"type": "step", "node": "condense", "query": question})
+            key = answer_key(question, parsed[1])
+            if cached := cache.get(key):
+                return emit({"type": "done", "result": {**cached, "cached": True, "seconds": 0, "question": question}})
+            for event in stream(GRAPHS[parsed[1]], question):
                 if event["type"] == "done":
                     flush()
                     result = payload(event["result"], time.perf_counter() - start)
@@ -265,6 +306,7 @@ def payload(out: dict, seconds: float) -> dict:
         from langfuse import get_client
         trace_url = get_client().get_trace_url(trace_id=out["trace_id"])
     return {
+        "question": out["question"],
         "answer": out["answer"],
         "attempts": out["attempts"],
         "grounded": out.get("grounded"),
