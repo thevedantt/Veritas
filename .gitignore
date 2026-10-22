@@ -7,3 +7,4 @@ uploads/
 eval_details_*.json
 spend.json
 state/
+qdrant_storage/

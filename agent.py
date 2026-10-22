@@ -5,6 +5,7 @@ CLI: python agent.py "your question"
 import hashlib
 import json
 import os
+import re
 import sys
 import threading
 import time
@@ -51,6 +52,11 @@ _primary_down_until = [0.0]  # shared by every graph in the process
 MONTHLY_BUDGET_USD = float(os.getenv("MONTHLY_BUDGET_USD", 5))
 SPEND_FILE = Path(os.getenv("SPEND_FILE", "spend.json"))
 UNKNOWN_PRICE = (2.50, 15.00)
+# Embeddings are billed per character. Conservative upper bound (about 4x the Vertex list price as of 2026-10),
+# so the cap overcounts rather than undercounts.
+EMBED_PRICE_PER_1M_CHARS = float(os.getenv("EMBED_PRICE_PER_1M_CHARS", 0.10))
+# A question is refused unless this much budget is left, so the last one can't push spend past the cap.
+QUESTION_RESERVE_USD = 0.01
 PRICES = {"gemini-3.8-flash": (0.75, 3.75), "gemini-2.5-flash": (0.30, 2.50), "gemini-2.5-flash-lite": (0.10, 0.40),
           "gemini-2.5-pro": (1.25, 10.00)}
 COLLECTION, QDRANT_PATH = "docs", "qdrant_data"
@@ -86,6 +92,36 @@ Answer:
 
 Is every factual claim in the answer supported by the context? An answer that says the context is
 insufficient counts as supported. Reply "yes" or "no" only."""
+
+
+CONDENSE = """Conversation so far:
+{h}
+
+Follow-up question: {q}
+
+Rewrite the follow-up as one standalone question that keeps every detail it needs from the conversation
+(names, numbers, products, documents). If it already stands alone, return it unchanged. Reply with the
+question only."""
+# words that make a question depend on earlier turns ("what about 250?", "and its price?")
+FOLLOW_UP = re.compile(r"\b(it|its|they|them|their|this|that|these|those|he|she|his|her|same|above|previous|"
+                       r"what about|how about|and for|also|instead|else|more)\b", re.I)
+
+
+def needs_context(question: str) -> bool:
+    return bool(FOLLOW_UP.search(question)) or len(question.split()) <= 4
+
+
+def standalone(question: str, history: list[dict]) -> str:
+    """Turn a follow-up into a self-contained question using the last few turns (one cheap critic call, only
+    when the question looks like it depends on them)."""
+    if not history or not needs_context(question):
+        return question
+    h = "\n".join(f"Q: {t['q'][:300]}\nA: {t['a'][:600]}" for t in history[-3:])
+    model = os.getenv("CRITIC_MODEL", "gemini-2.5-flash-lite")
+    msg = llm(model, 0).with_retry(stop_after_attempt=LLM_ATTEMPTS).invoke(CONDENSE.format(h=h, q=question))
+    charge(cost_of({model: msg.usage_metadata or {}}))
+    out = text(msg).strip().strip('"')
+    return out if 0 < len(out) <= 2000 else question
 
 
 class State(TypedDict, total=False):
@@ -137,12 +173,15 @@ class QueryCachedEmbeddings(Embeddings):
         self.inner, self.name = inner, name
 
     def embed_documents(self, texts: list[str]) -> list[list[float]]:
-        return with_backoff(self.inner.embed_documents, texts)
+        vectors = with_backoff(self.inner.embed_documents, texts)
+        charge(sum(map(len, texts)) * EMBED_PRICE_PER_1M_CHARS / 1e6)
+        return vectors
 
     def embed_query(self, text: str) -> list[float]:
         key = f"emb:{self.name}:{hashlib.sha256(text.encode()).hexdigest()}"
         if (vector := cache.get(key)) is None:
             vector = with_backoff(self.inner.embed_query, text)
+            charge(len(text) * EMBED_PRICE_PER_1M_CHARS / 1e6)
             cache.set(key, vector, EMBED_TTL)
         return vector
 
@@ -165,7 +204,9 @@ def store():
     from langchain_qdrant import QdrantVectorStore, RetrievalMode
     return QdrantVectorStore.construct_instance(
         embedding=embeddings(), sparse_embedding=sparse_embeddings(), retrieval_mode=RetrievalMode.HYBRID,
-        collection_name=COLLECTION, client_options={"path": QDRANT_PATH},
+        collection_name=COLLECTION,
+        # QDRANT_URL (a Qdrant server) lets several app processes share one index; default is the embedded folder
+        client_options={"url": os.environ["QDRANT_URL"]} if os.getenv("QDRANT_URL") else {"path": QDRANT_PATH},
         validate_collection_config=False)  # skips a billed "dummy" embedding call on every start
 
 
@@ -362,9 +403,15 @@ def cost_of(by_model: dict) -> float:
     return total
 
 
+def _ledger_lock():
+    """Thread lock plus an OS file lock, so several server/eval processes can share one ledger file."""
+    import portalocker
+    return portalocker.Lock(str(SPEND_FILE) + ".lock", timeout=10)
+
+
 def spent() -> float:
     """USD spent this calendar month (UTC)."""
-    with _spend_lock:
+    with _spend_lock, _ledger_lock():
         try:
             return json.loads(SPEND_FILE.read_text()).get(time.strftime("%Y-%m", time.gmtime()), 0.0)
         except (OSError, ValueError):
@@ -375,7 +422,7 @@ def charge(usd: float):
     if usd <= 0:
         return
     month = time.strftime("%Y-%m", time.gmtime())
-    with _spend_lock:  # ponytail: one process writes the file; a shared store (Redis/Postgres) once there are several
+    with _spend_lock, _ledger_lock():
         try:
             ledger = json.loads(SPEND_FILE.read_text())
         except (OSError, ValueError):
@@ -385,7 +432,7 @@ def charge(usd: float):
 
 
 def check_budget():
-    if spent() >= MONTHLY_BUDGET_USD:
+    if spent() + QUESTION_RESERVE_USD > MONTHLY_BUDGET_USD:
         raise BudgetExceeded(f"monthly AI budget of ${MONTHLY_BUDGET_USD:.2f} reached")
 
 
