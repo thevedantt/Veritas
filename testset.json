@@ -1,167 +1,287 @@
 [
- {
-  "question": "What BLEU score does the big Transformer model achieve on the WMT 2014 English-to-German translation task?",
-  "ground_truth": "The big Transformer achieves 28.4 BLEU on WMT 2014 English-to-German.",
-  "type": "direct"
- },
- {
-  "question": "What BLEU score does the big Transformer achieve on WMT 2014 English-to-French?",
-  "ground_truth": "41.8 BLEU on WMT 2014 English-to-French (abstract and Table 2). The paper is inconsistent: the text of section 6.1 says 41.0, so an answer giving 41.8, or giving both and noting the conflict, is correct.",
-  "type": "direct"
- },
- {
-  "question": "What is the per-layer complexity of self-attention compared to a recurrent layer?",
-  "ground_truth": "Self-attention has per-layer complexity O(n^2 * d) while a recurrent layer has O(n * d^2), where n is sequence length and d is representation dimension.",
-  "type": "direct"
- },
- {
-  "question": "How many sequential operations and what maximum path length does a self-attention layer need?",
-  "ground_truth": "A self-attention layer needs O(1) sequential operations and has O(1) maximum path length, versus O(n) for both in a recurrent layer.",
-  "type": "direct"
- },
- {
-  "question": "What are d_model, d_ff and the number of heads in the base Transformer?",
-  "ground_truth": "The base model uses d_model = 512, d_ff = 2048 and h = 8 attention heads.",
-  "type": "direct"
- },
- {
-  "question": "What are d_model, d_ff, number of heads and dropout for the big Transformer?",
-  "ground_truth": "The big model uses d_model = 1024, d_ff = 4096, h = 16 heads and dropout P_drop = 0.3.",
-  "type": "direct"
- },
- {
-  "question": "How many layers are in the encoder and decoder stacks?",
-  "ground_truth": "Both the encoder and decoder are stacks of N = 6 identical layers.",
-  "type": "direct"
- },
- {
-  "question": "What hardware was used for training and how long did the base and big models train?",
-  "ground_truth": "Training used one machine with 8 NVIDIA P100 GPUs. Base models trained for 100,000 steps (about 12 hours, 0.4 s per step); big models trained for 300,000 steps (3.5 days, 1.0 s per step).",
-  "type": "direct"
- },
- {
-  "question": "Which optimizer settings were used?",
-  "ground_truth": "Adam with beta1 = 0.9, beta2 = 0.98 and epsilon = 1e-9, with a learning rate that increases linearly for warmup_steps = 4000 and then decreases proportionally to the inverse square root of the step number.",
-  "type": "direct"
- },
- {
-  "question": "What value of label smoothing was used?",
-  "ground_truth": "Label smoothing with epsilon_ls = 0.1 was used; it hurts perplexity but improves accuracy and BLEU.",
-  "type": "direct"
- },
- {
-  "question": "How large were the training datasets and vocabularies for EN-DE and EN-FR?",
-  "ground_truth": "EN-DE used WMT 2014 with about 4.5 million sentence pairs and a shared byte-pair vocabulary of about 37,000 tokens; EN-FR used 36 million sentences with a 32,000 word-piece vocabulary.",
-  "type": "direct"
- },
- {
-  "question": "What beam search settings were used at inference?",
-  "ground_truth": "Beam search with beam size 4 and length penalty alpha = 0.6, with maximum output length of input length + 50.",
-  "type": "direct"
- },
- {
-  "question": "How much worse is single-head attention than the best multi-head setting?",
-  "ground_truth": "Single-head attention is 0.9 BLEU worse than the best setting.",
-  "type": "direct"
- },
- {
-  "question": "What F1 score does the Transformer get on English constituency parsing when trained only on WSJ?",
-  "ground_truth": "Trained only on the WSJ training set, the 4-layer Transformer reaches 91.3 F1 on WSJ section 23; in the semi-supervised setting it reaches 92.7 F1.",
-  "type": "direct"
- },
- {
-  "question": "What was the training cost in FLOPs of the big Transformer on EN-DE?",
-  "ground_truth": "The big Transformer's training cost is 2.3 x 10^19 FLOPs.",
-  "type": "direct"
- },
- {
-  "type": "vague",
-  "question": "how long did training the bigger version take, and on what machines?",
-  "ground_truth": "The big Transformer models trained for 300,000 steps, about 3.5 days, on one machine with 8 NVIDIA P100 GPUs."
- },
- {
-  "type": "vague",
-  "question": "what trick lets the model know where each word sits in the sentence?",
-  "ground_truth": "Positional encodings: sine and cosine functions of different frequencies are added to the input embeddings at the bottom of the encoder and decoder stacks."
- },
- {
-  "type": "vague",
-  "question": "why do they shrink the dot products before the softmax?",
-  "ground_truth": "Dot products are scaled by 1/sqrt(d_k) because for large d_k they grow large in magnitude, pushing the softmax into regions with extremely small gradients."
- },
- {
-  "type": "vague",
-  "question": "what did they do to keep it from overfitting?",
-  "ground_truth": "They used residual dropout (P_drop = 0.1 for the base model) on sub-layer outputs and on the sums of embeddings and positional encodings, plus label smoothing with epsilon_ls = 0.1."
- },
- {
-  "type": "vague",
-  "question": "how big was the shared word list for the German data?",
-  "ground_truth": "English-German used byte-pair encoding with a shared source-target vocabulary of about 37,000 tokens."
- },
- {
-  "type": "messy",
-  "question": "How much qualified overtime compensation can a married couple filing jointly deduct?",
-  "ground_truth": "Up to $25,000 of qualified overtime compensation if married filing jointly ($12,500 otherwise), for tax years beginning after 2024 and ending before 2029."
- },
- {
-  "type": "messy",
-  "question": "Up to how much in qualified tips can be deducted, and do mandatory service charges count?",
-  "ground_truth": "Up to $25,000 of qualified tips received in occupations that customarily and regularly received tips on or before December 31, 2024; mandatory service charges added to the bill are not qualified tips."
- },
- {
-  "type": "messy",
-  "question": "Since the 2022 redesign, what is Form W-4P used for, and which form covers nonperiodic payments?",
-  "ground_truth": "Form W-4P is used only for withholding elections on periodic pension or annuity payments; nonperiodic payments and eligible rollover distributions use Form W-4R."
- },
- {
-  "type": "messy",
-  "question": "Under the STANDARD withholding rate schedule for married filing jointly, what is withheld for an adjusted annual wage between $120,100 and $230,700?",
-  "ground_truth": "$11,600.00 plus 22% of the amount over $120,100."
- },
- {
-  "type": "messy",
-  "question": "Under the STANDARD schedule, what is withheld for a single filer with an adjusted annual wage of $648,100 or more?",
-  "ground_truth": "$192,979.25 plus 37% of the amount over $648,100."
- },
- {
-  "type": "messy",
-  "question": "In the Form W-4 Step 2 checkbox schedule for head of household, at what adjusted annual wage does the 10% rate start?",
-  "ground_truth": "At $12,075; the 10% rate applies from $12,075 up to $20,925."
- },
- {
-  "type": "messy",
-  "question": "Under the STANDARD schedule for single filers, below what adjusted annual wage is nothing withheld?",
-  "ground_truth": "Below $7,500 (the 0% bracket runs from $0 up to $7,500)."
- },
- {
-  "type": "messy",
-  "question": "On the 2026 weekly wage bracket table, what is the standard withholding for married filing jointly at an adjusted wage of $700?",
-  "ground_truth": "$8 (row: at least $695 but less than $705; the Form W-4 Step 2 checkbox amount is $42)."
- },
- {
-  "type": "messy",
-  "question": "On the 2026 weekly wage bracket table, what is the Form W-4 Step 2 checkbox withholding for a single filer earning $500?",
-  "ground_truth": "$39 (row: at least $495 but less than $505)."
- },
- {
-  "type": "messy",
-  "question": "On the 2026 weekly wage bracket table, what is the standard withholding for head of household at an adjusted wage of $760?",
-  "ground_truth": "$30 (row: at least $755 but less than $765)."
- },
- {
-  "type": "unanswerable",
-  "question": "What batch size was used to fine-tune BERT?",
-  "ground_truth": "The documents do not contain this information."
- },
- {
-  "type": "unanswerable",
-  "question": "What is the 2026 Social Security wage base limit?",
-  "ground_truth": "The documents do not contain this information."
- },
- {
-  "type": "unanswerable",
-  "question": "How many GPUs were used to train GPT-3?",
-  "ground_truth": "The documents do not contain this information."
- }
+  {
+    "question": "What BLEU score does the big Transformer model achieve on the WMT 2014 English-to-German translation task?",
+    "ground_truth": "The big Transformer achieves 28.4 BLEU on WMT 2014 English-to-German.",
+    "type": "direct"
+  },
+  {
+    "question": "What BLEU score does the big Transformer achieve on WMT 2014 English-to-French?",
+    "ground_truth": "41.8 BLEU on WMT 2014 English-to-French (abstract and Table 2). The paper is inconsistent: the text of section 6.1 says 41.0, so an answer giving 41.8, or giving both and noting the conflict, is correct.",
+    "type": "direct"
+  },
+  {
+    "question": "What is the per-layer complexity of self-attention compared to a recurrent layer?",
+    "ground_truth": "Self-attention has per-layer complexity O(n^2 * d) while a recurrent layer has O(n * d^2), where n is sequence length and d is representation dimension.",
+    "type": "direct"
+  },
+  {
+    "question": "How many sequential operations and what maximum path length does a self-attention layer need?",
+    "ground_truth": "A self-attention layer needs O(1) sequential operations and has O(1) maximum path length, versus O(n) for both in a recurrent layer.",
+    "type": "direct"
+  },
+  {
+    "question": "What are d_model, d_ff and the number of heads in the base Transformer?",
+    "ground_truth": "The base model uses d_model = 512, d_ff = 2048 and h = 8 attention heads.",
+    "type": "direct"
+  },
+  {
+    "question": "What are d_model, d_ff, number of heads and dropout for the big Transformer?",
+    "ground_truth": "The big model uses d_model = 1024, d_ff = 4096, h = 16 heads and dropout P_drop = 0.3.",
+    "type": "direct"
+  },
+  {
+    "question": "How many layers are in the encoder and decoder stacks?",
+    "ground_truth": "Both the encoder and decoder are stacks of N = 6 identical layers.",
+    "type": "direct"
+  },
+  {
+    "question": "What hardware was used for training and how long did the base and big models train?",
+    "ground_truth": "Training used one machine with 8 NVIDIA P100 GPUs. Base models trained for 100,000 steps (about 12 hours, 0.4 s per step); big models trained for 300,000 steps (3.5 days, 1.0 s per step).",
+    "type": "direct"
+  },
+  {
+    "question": "Which optimizer settings were used?",
+    "ground_truth": "Adam with beta1 = 0.9, beta2 = 0.98 and epsilon = 1e-9, with a learning rate that increases linearly for warmup_steps = 4000 and then decreases proportionally to the inverse square root of the step number.",
+    "type": "direct"
+  },
+  {
+    "question": "What value of label smoothing was used?",
+    "ground_truth": "Label smoothing with epsilon_ls = 0.1 was used; it hurts perplexity but improves accuracy and BLEU.",
+    "type": "direct"
+  },
+  {
+    "question": "How large were the training datasets and vocabularies for EN-DE and EN-FR?",
+    "ground_truth": "EN-DE used WMT 2014 with about 4.5 million sentence pairs and a shared byte-pair vocabulary of about 37,000 tokens; EN-FR used 36 million sentences with a 32,000 word-piece vocabulary.",
+    "type": "direct"
+  },
+  {
+    "question": "What beam search settings were used at inference?",
+    "ground_truth": "Beam search with beam size 4 and length penalty alpha = 0.6, with maximum output length of input length + 50.",
+    "type": "direct"
+  },
+  {
+    "question": "How much worse is single-head attention than the best multi-head setting?",
+    "ground_truth": "Single-head attention is 0.9 BLEU worse than the best setting.",
+    "type": "direct"
+  },
+  {
+    "question": "What F1 score does the Transformer get on English constituency parsing when trained only on WSJ?",
+    "ground_truth": "Trained only on the WSJ training set, the 4-layer Transformer reaches 91.3 F1 on WSJ section 23; in the semi-supervised setting it reaches 92.7 F1.",
+    "type": "direct"
+  },
+  {
+    "question": "What was the training cost in FLOPs of the big Transformer on EN-DE?",
+    "ground_truth": "The big Transformer's training cost is 2.3 x 10^19 FLOPs.",
+    "type": "direct"
+  },
+  {
+    "type": "vague",
+    "question": "how long did training the bigger version take, and on what machines?",
+    "ground_truth": "The big Transformer models trained for 300,000 steps, about 3.5 days, on one machine with 8 NVIDIA P100 GPUs."
+  },
+  {
+    "type": "vague",
+    "question": "what trick lets the model know where each word sits in the sentence?",
+    "ground_truth": "Positional encodings: sine and cosine functions of different frequencies are added to the input embeddings at the bottom of the encoder and decoder stacks."
+  },
+  {
+    "type": "vague",
+    "question": "why do they shrink the dot products before the softmax?",
+    "ground_truth": "Dot products are scaled by 1/sqrt(d_k) because for large d_k they grow large in magnitude, pushing the softmax into regions with extremely small gradients."
+  },
+  {
+    "type": "vague",
+    "question": "what did they do to keep it from overfitting?",
+    "ground_truth": "They used residual dropout (P_drop = 0.1 for the base model) on sub-layer outputs and on the sums of embeddings and positional encodings, plus label smoothing with epsilon_ls = 0.1."
+  },
+  {
+    "type": "vague",
+    "question": "how big was the shared word list for the German data?",
+    "ground_truth": "English-German used byte-pair encoding with a shared source-target vocabulary of about 37,000 tokens."
+  },
+  {
+    "type": "messy",
+    "question": "How much qualified overtime compensation can a married couple filing jointly deduct?",
+    "ground_truth": "Up to $25,000 of qualified overtime compensation if married filing jointly ($12,500 otherwise), for tax years beginning after 2024 and ending before 2029."
+  },
+  {
+    "type": "messy",
+    "question": "Up to how much in qualified tips can be deducted, and do mandatory service charges count?",
+    "ground_truth": "Up to $25,000 of qualified tips received in occupations that customarily and regularly received tips on or before December 31, 2024; mandatory service charges added to the bill are not qualified tips."
+  },
+  {
+    "type": "messy",
+    "question": "Since the 2022 redesign, what is Form W-4P used for, and which form covers nonperiodic payments?",
+    "ground_truth": "Form W-4P is used only for withholding elections on periodic pension or annuity payments; nonperiodic payments and eligible rollover distributions use Form W-4R."
+  },
+  {
+    "type": "messy",
+    "question": "Under the STANDARD withholding rate schedule for married filing jointly, what is withheld for an adjusted annual wage between $120,100 and $230,700?",
+    "ground_truth": "$11,600.00 plus 22% of the amount over $120,100."
+  },
+  {
+    "type": "messy",
+    "question": "Under the STANDARD schedule, what is withheld for a single filer with an adjusted annual wage of $648,100 or more?",
+    "ground_truth": "$192,979.25 plus 37% of the amount over $648,100."
+  },
+  {
+    "type": "messy",
+    "question": "In the Form W-4 Step 2 checkbox schedule for head of household, at what adjusted annual wage does the 10% rate start?",
+    "ground_truth": "At $12,075; the 10% rate applies from $12,075 up to $20,925."
+  },
+  {
+    "type": "messy",
+    "question": "Under the STANDARD schedule for single filers, below what adjusted annual wage is nothing withheld?",
+    "ground_truth": "Below $7,500 (the 0% bracket runs from $0 up to $7,500)."
+  },
+  {
+    "type": "messy",
+    "question": "On the 2026 weekly wage bracket table, what is the standard withholding for married filing jointly at an adjusted wage of $700?",
+    "ground_truth": "$8 (row: at least $695 but less than $705; the Form W-4 Step 2 checkbox amount is $42)."
+  },
+  {
+    "type": "messy",
+    "question": "On the 2026 weekly wage bracket table, what is the Form W-4 Step 2 checkbox withholding for a single filer earning $500?",
+    "ground_truth": "$39 (row: at least $495 but less than $505)."
+  },
+  {
+    "type": "messy",
+    "question": "On the 2026 weekly wage bracket table, what is the standard withholding for head of household at an adjusted wage of $760?",
+    "ground_truth": "$30 (row: at least $755 but less than $765)."
+  },
+  {
+    "type": "unanswerable",
+    "question": "What batch size was used to fine-tune BERT?",
+    "ground_truth": "The documents do not contain this information."
+  },
+  {
+    "type": "unanswerable",
+    "question": "What is the 2026 Social Security wage base limit?",
+    "ground_truth": "The documents do not contain this information."
+  },
+  {
+    "type": "unanswerable",
+    "question": "How many GPUs were used to train GPT-3?",
+    "ground_truth": "The documents do not contain this information."
+  },
+  {
+    "question": "What top-5 error did the ResNet ensemble get on the ImageNet test set, and what did it win?",
+    "ground_truth": "3.57% top-5 error; it won 1st place in the ILSVRC 2015 classification task.",
+    "type": "direct",
+    "split": "heldout"
+  },
+  {
+    "question": "What optimizer settings were used to train the ImageNet ResNets?",
+    "ground_truth": "SGD with mini-batch 256, learning rate starting at 0.1 divided by 10 when error plateaus, up to 60x10^4 iterations, weight decay 0.0001, momentum 0.9, no dropout.",
+    "type": "direct",
+    "split": "heldout"
+  },
+  {
+    "question": "How many FLOPs does the 152-layer ResNet have compared with VGG-16/19?",
+    "ground_truth": "11.3 billion FLOPs, lower than VGG-16/19 (15.3/19.6 billion).",
+    "type": "direct",
+    "split": "heldout"
+  },
+  {
+    "question": "How large an improvement did deep residual nets give on COCO object detection?",
+    "ground_truth": "A 6.0% increase in mAP@[.5, .95], a 28% relative improvement.",
+    "type": "direct",
+    "split": "heldout"
+  },
+  {
+    "question": "In the single-model ImageNet validation results, what are the top-1 and top-5 errors of ResNet-152?",
+    "ground_truth": "19.38% top-1 and 4.49% top-5.",
+    "type": "messy",
+    "split": "heldout"
+  },
+  {
+    "question": "What top-1 error do the plain 34-layer net and the 34-layer ResNet get in 10-crop testing?",
+    "ground_truth": "Plain-34: 28.54%; ResNet-34: 25.03%.",
+    "type": "messy",
+    "split": "heldout"
+  },
+  {
+    "question": "On CIFAR-10, how many parameters and what error does the 1202-layer ResNet have?",
+    "ground_truth": "19.4M parameters and 7.93% error.",
+    "type": "messy",
+    "split": "heldout"
+  },
+  {
+    "question": "why didn't they just keep stacking plain layers deeper?",
+    "ground_truth": "Deeper plain nets suffer a degradation problem: e.g. the 34-layer plain net has higher training/validation error than the 18-layer one; residual learning fixes this.",
+    "type": "vague",
+    "split": "heldout"
+  },
+  {
+    "question": "how were the small CIFAR models trained?",
+    "ground_truth": "Mini-batch 128 on two GPUs, learning rate 0.1 divided by 10 at 32k and 48k iterations, stopped at 64k, weight decay 0.0001, momentum 0.9, no dropout.",
+    "type": "vague",
+    "split": "heldout"
+  },
+  {
+    "question": "How many images does CIFAR-10 have for training and testing?",
+    "ground_truth": "50k training and 10k test images, 10 classes.",
+    "type": "direct",
+    "split": "heldout"
+  },
+  {
+    "question": "What was Kestrel's total revenue in 2025 and how much did it grow?",
+    "ground_truth": "$412.6M, up 18.0% from $349.7M.",
+    "type": "direct",
+    "split": "heldout"
+  },
+  {
+    "question": "What is the list price and payload of the Atlas X2?",
+    "ground_truth": "$37,400, payload 90 kg.",
+    "type": "messy",
+    "split": "heldout"
+  },
+  {
+    "question": "What discount applies to an order of 60 robots?",
+    "ground_truth": "10% (orders of 50-99 units).",
+    "type": "messy",
+    "split": "heldout"
+  },
+  {
+    "question": "For a P2 incident, how fast is the first response and target resolution?",
+    "ground_truth": "4 hours first response, 2 business days target resolution, 24/7 coverage.",
+    "type": "messy",
+    "split": "heldout"
+  },
+  {
+    "question": "How many warranty claims did the Sparrow family have and what was the main cause?",
+    "ground_truth": "58 claims; main cause wheel hub seal.",
+    "type": "messy",
+    "split": "heldout"
+  },
+  {
+    "question": "How many units were shipped in total according to the warranty appendix?",
+    "ground_truth": "8,247 units (205 claims).",
+    "type": "messy",
+    "split": "heldout"
+  },
+  {
+    "question": "What is the parental leave policy and how many remote days are allowed?",
+    "ground_truth": "26 weeks full pay for the primary caregiver, 8 weeks for the secondary; up to 2 remote days per week.",
+    "type": "direct",
+    "split": "heldout"
+  },
+  {
+    "question": "who runs the money side of the business?",
+    "ground_truth": "Daniel Reyes, Chief Financial Officer.",
+    "type": "vague",
+    "split": "heldout"
+  },
+  {
+    "question": "What is Kestrel's share price?",
+    "ground_truth": "",
+    "type": "unanswerable",
+    "split": "heldout"
+  },
+  {
+    "question": "What image resolution did the Vision Transformer (ViT) use for pre-training?",
+    "ground_truth": "",
+    "type": "unanswerable",
+    "split": "heldout"
+  }
 ]

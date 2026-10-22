@@ -8,3 +8,4 @@ spend.json
 __pycache__
 *.log
 eval_details_*.json
+qdrant_storage

@@ -1,16 +1,37 @@
-# docker compose up -d  ->  http://<vm>:8000   (put Caddy/nginx with TLS in front for public access)
-# Needs .env (see .env.example) and GCP_KEY_FILE pointing at the service-account key on the VM.
+# docker compose up -d --build   ->  https://$DOMAIN  (Caddy gets a TLS certificate automatically)
+# Needs .env (see .env.example; set APP_PASSWORD for a public site) and GCP_KEY_FILE = service-account key path.
+# Untested here: the dev machine has no Docker.
 services:
   veritas:
     build: .
-    ports: ["8000:8000"]
     env_file: .env
     environment:
       GOOGLE_APPLICATION_CREDENTIALS: /secrets/gcp-key.json
+      QDRANT_URL: http://qdrant:6333     # shared index server instead of the embedded folder
     volumes:
-      - ./qdrant_data:/app/qdrant_data   # vector index
       - ./uploads:/app/uploads           # original files
       - ./state:/app/state               # spend.json (monthly cost ledger)
       - ${GCP_KEY_FILE:?set GCP_KEY_FILE to the key path}:/secrets/gcp-key.json:ro
+    depends_on: [qdrant]
     mem_limit: 4g                        # Docling parsing peaks around 1.5 GB
     restart: unless-stopped
+
+  qdrant:
+    image: qdrant/qdrant:v1.12.4
+    volumes:
+      - ./qdrant_storage:/qdrant/storage
+    restart: unless-stopped
+
+  caddy:                                 # HTTPS reverse proxy in front of the app
+    image: caddy:2.8.4
+    ports: ["80:80", "443:443"]
+    environment:
+      DOMAIN: ${DOMAIN:-localhost}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+    depends_on: [veritas]
+    restart: unless-stopped
+
+volumes:
+  caddy_data:

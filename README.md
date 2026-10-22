@@ -102,20 +102,26 @@ answer.
 ## Deploy (single VM)
 
 ```bash
-cp .env.example .env                  # fill in project, models, budget
+cp .env.example .env                  # fill in project, models, budget; set APP_PASSWORD for a public site
 export GCP_KEY_FILE=/path/to/key.json # service account with the Vertex AI User role
-docker compose up -d --build          # http://<vm>:8000 ; put Caddy/nginx with TLS in front
+export DOMAIN=veritas.example.com     # DNS A record pointing at the VM
+docker compose up -d --build          # app + Qdrant server + Caddy (automatic HTTPS) -> https://$DOMAIN
 ```
 
-Give the VM at least 4 GB RAM (parsing peaks around 1.5 GB). The Docker files have not been run yet: the dev
-machine has no Docker.
+The compose file runs the index as a Qdrant server (`QDRANT_URL`) instead of the embedded folder, so the spend
+ledger (file-locked) and index can be shared; Caddy terminates TLS and streams answers unbuffered. With
+`APP_PASSWORD` set, every page and API asks for that password (HTTP Basic auth); `/api/health` stays open for
+uptime checks. Give the VM at least 4 GB RAM (parsing peaks around 1.5 GB). The Docker files have not been run
+yet: the dev machine has no Docker.
 
 ## Known limits
 
 - One upload parses at a time; a 300-page book takes ~25 minutes on a laptop CPU (searchable as it goes).
-- Single-user: no sign-in or per-user document isolation yet; one server process.
-- The spend cap counts model tokens, not embeddings (cents per book).
-- Scores come from 33 questions: one answer is ~3 percentage points, so small differences are noise.
+- One shared password, not per-user accounts: everyone who signs in sees the same library.
+- Answer cache and rate limits are per process; run one app process, or move them to Redis to scale out.
+- The table clean-up rules (section labels, OCR fixes) were developed on one IRS scan; the held-out Kestrel
+  scan and ResNet tables test them, but other layouts may need new rules.
+- Embedding cost is counted at a conservative per-character estimate, not the exact bill.
 
 ## Setup
 
@@ -152,7 +158,9 @@ python ingest.py --reset data/               # wipe the index and rebuild from t
 python agent.py "What dropout does the big Transformer use?"
 python eval.py --baseline                    # before: plain retrieve -> generate
 python eval.py                               # after: self-correcting agent; rewrites the table below
-python test_routing.py                       # routing and rerank self-check
+python eval.py --split heldout --repeat 3    # only documents never used for tuning, 3 runs averaged
+python test_routing.py                       # routing, rerank, spend cap and follow-up self-check
+python test_eval.py                          # eval scoring, splits and repeats self-check
 python test_ingest.py                        # table labels, OCR cleanup, scanned-page split self-check
 ```
 
@@ -173,27 +181,27 @@ question (correct / supported / retrieved), so the next run regenerates it with 
 <!-- scores:start -->
 | Metric | Baseline (retrieve → generate) | Self-correcting agent | Δ |
 |---|---|---|---|
-| faithfulness | 0.879 | 0.875 | -0.004 |
-| answer_relevancy | 0.744 | 0.712 | -0.032 |
-| llm_context_precision_with_reference | 0.749 | 0.754 | +0.005 |
-| context_recall | 0.933 | 0.967 | +0.034 |
-| correct | 0.867 | 0.833 | -0.034 |
-| faithfulness [direct] | 0.952 | 0.95 | -0.002 |
-| context_recall [direct] | 0.867 | 1 | +0.133 |
-| correct [direct] | 0.867 | 1 | +0.133 |
-| faithfulness [vague] | 0.933 | 0.833 | -0.1 |
-| context_recall [vague] | 1 | 0.8 | -0.2 |
-| correct [vague] | 1 | 0.8 | -0.2 |
-| faithfulness [messy] | 0.75 | 0.783 | +0.033 |
-| context_recall [messy] | 1 | 1 | +0 |
-| correct [messy] | 0.8 | 0.6 | -0.2 |
+| faithfulness | – | 0.875 | |
+| answer_relevancy | – | 0.712 | |
+| llm_context_precision_with_reference | – | 0.754 | |
+| context_recall | – | 0.967 | |
+| correct | 0.875 | 0.833 | -0.042 |
+| faithfulness [direct] | – | 0.95 | |
+| context_recall [direct] | – | 1 | |
+| correct [direct] | 0.864 | 1 | +0.136 |
+| faithfulness [vague] | – | 0.833 | |
+| context_recall [vague] | – | 0.8 | |
+| correct [vague] | 0.75 | 0.8 | +0.05 |
+| faithfulness [messy] | – | 0.783 | |
+| context_recall [messy] | – | 1 | |
+| correct [messy] | 0.944 | 0.6 | -0.344 |
 | abstention_rate [unanswerable] | 1 | 1 | +0 |
 | rewrite_rate | 0 | 0.273 | +0.273 |
-| mean_attempts | 0 | 0.39 | +0.39 |
-| mean_seconds | 1.2 | 4.3 | +3.1 |
-| mean_cost_usd | 0.00087 | 0.00054 | -0.00033 |
+| mean_attempts | – | 0.39 | |
+| mean_seconds | 1.133 | 4.3 | +3.167 |
+| mean_cost_usd | 0.00086 | 0.00054 | -0.00032 |
 
-_33 questions from `testset.json` (direct, vague, messy scanned tables, unanswerable), judged by Ragas; unanswerable questions are scored on abstention instead._
+_33 questions from `testset.json` (direct, vague, messy scanned tables, unanswerable; `heldout` = documents never used for tuning), mean of 1 runs, graded by `gemini-2.5-flash-lite` against reference answers; unanswerable questions are scored on abstention instead._
 <!-- scores:end -->
 
 Metrics: **faithfulness** (answer claims supported by context), **answer_relevancy** (answer addresses the

@@ -276,6 +276,7 @@ main {
 .msg.bot { background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow); }
 .msg.error { border-color: var(--warn); background: var(--warn-soft); color: var(--warn); }
 .answer { white-space: pre-wrap; }
+.reread { margin: 0 0 8px; font-size: .74rem; color: var(--muted); }
 
 .meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; font-size: .72rem; }
 .meta:empty { display: none; }

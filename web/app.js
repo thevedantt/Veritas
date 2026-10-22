@@ -314,7 +314,10 @@ function renderAnswer(data) {
   return msg;
 }
 
+const chat = []; // earlier {q, a} turns of this chat, sent so follow-ups ("and for 250?") can be understood
+
 const STEP_TEXT = {
+  condense: e => `Follow-up read as: “${e.query}”`,
   retrieve: e => (e.found > e.kept
     ? `Found ${e.found} passages, kept the best ${e.kept}`
     : `Found ${e.kept} passage${e.kept === 1 ? "" : "s"}`),
@@ -357,7 +360,7 @@ async function ask(question) {
     const res = await fetch("/api/ask/stream", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question, self_correct: selfCorrect.checked }),
+      body: JSON.stringify({ question, self_correct: selfCorrect.checked, history: chat.slice(-3) }),
     });
     if (!res.ok) throw new Error((await res.json()).error || `HTTP ${res.status}`);
     let finished = false;
@@ -377,6 +380,10 @@ async function ask(question) {
         answer?.remove();
         live.replaceWith(renderAnswer(e.result));
         logTurn(question, e.result);
+        chat.push({ q: e.result.question || question, a: e.result.answer });
+        if (e.result.question && e.result.question !== question) {
+          thread.lastElementChild.prepend(el("p", "reread", `Follow-up read as: ${e.result.question}`));
+        }
         finished = true;
       } else if (e.type === "error") {
         throw new Error(e.error);
