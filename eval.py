@@ -21,7 +21,7 @@ from pathlib import Path
 
 from langchain_core.callbacks import UsageMetadataCallbackHandler
 
-from agent import build, charge, cost_of, flush, label, llm, run, text, tracing
+from agent import build, charge, cost_of, flush, label, llm, run, store, text, tracing
 
 EVAL_BUDGET_USD = float(os.getenv("EVAL_BUDGET_USD", 1.0))
 JUDGE_MODEL = os.getenv("JUDGE_MODEL", "gemini-2.5-flash-lite")
@@ -73,8 +73,9 @@ def pick(tests: list[dict], argv: list[str]) -> list[dict]:
     return tests
 
 
-def evaluate_mode(baseline: bool, tests: list[dict], budget: float = EVAL_BUDGET_USD) -> tuple[dict, list[dict]]:
-    graph = build(max_attempts=0) if baseline else build()
+def evaluate_mode(baseline: bool, tests: list[dict], budget: float = EVAL_BUDGET_USD,
+                  vs=None) -> tuple[dict, list[dict]]:
+    graph = build(max_attempts=0, vs=vs) if baseline else build(vs=vs)
     judge = llm(JUDGE_MODEL, 0).with_retry(stop_after_attempt=3)
     judge_usage = UsageMetadataCallbackHandler()
     spent, rows = 0.0, []
@@ -195,8 +196,9 @@ def main():
     tests = pick(all_tests, sys.argv)
     repeat = int(sys.argv[sys.argv.index("--repeat") + 1]) if "--repeat" in sys.argv else 1
     summaries, rows, spent = [], [], 0.0
+    vs = store()  # one index connection for all repeats (the embedded index allows only one)
     for r in range(repeat):
-        summary, run_rows = evaluate_mode(baseline, tests, EVAL_BUDGET_USD - spent)
+        summary, run_rows = evaluate_mode(baseline, tests, EVAL_BUDGET_USD - spent, vs)
         spent += summary["eval_cost_usd"]
         summaries.append(summary)
         rows += [{**row, "run": r + 1} for row in run_rows]
