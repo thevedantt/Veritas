@@ -65,3 +65,13 @@ try:
 except agent.BudgetExceeded:
     pass
 print("ok")
+
+# follow-ups: only questions that lean on earlier turns trigger the (billed) rewrite
+from agent import needs_context, standalone  # noqa: E402
+
+assert needs_context("what about 250 robots?") and needs_context("and its price?") and needs_context("why?")
+assert not needs_context("What discount applies to an order of 60 robots?")
+assert standalone("What discount applies to an order of 60 robots?", [{"q": "x", "a": "y"}]) == \
+    "What discount applies to an order of 60 robots?"  # standalone question: no model call
+assert standalone("and for 250?", []) == "and for 250?"  # no history: no model call
+print("ok")
