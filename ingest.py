@@ -16,6 +16,7 @@ from pathlib import Path
 from langchain_core.documents import Document
 from qdrant_client import models
 
+from agent import injection_risk
 from agent import (COLLECTION, DB_LOCK, LLM_ATTEMPTS, MONTHLY_BUDGET_USD, QDRANT_PATH, charge, cost_of, llm,
                    spent, store, text)
 from cache import library_changed
@@ -230,7 +231,10 @@ def to_docs(dl, name: str, did: str, page: int | None = None) -> list[Document]:
             page_content=compact(chunker.contextualize(c)),  # prepends section headings; tables as Markdown rows
             metadata={"doc_id": did, "source": name, "page": page or (prov[0].page_no if prov else None),
                       "headings": " > ".join(c.meta.headings or []),
-                      "has_table": any(i.label == "table" for i in c.meta.doc_items)}))
+                      "has_table": any(i.label == "table" for i in c.meta.doc_items),
+                      "flagged": injection_risk(docs_text := compact(chunker.contextualize(c)))}))
+        if docs[-1].metadata["flagged"]:
+            print(f"warning: {name} has a passage that looks like instructions to the model: {docs_text[:80]!r}", flush=True)
     return docs
 
 

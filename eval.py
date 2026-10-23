@@ -6,6 +6,7 @@ python eval.py --type messy          # only one question type (direct, vague, me
 python eval.py --limit 5             # only the first 5 questions (after --type)
 python eval.py --split heldout       # only questions on documents never used for tuning (or --split dev)
 python eval.py --repeat 3            # run 3 times; report the mean and min-max of each score
+python eval.py --workers 4           # ask 4 questions at once: same cost, ~4x less wall time
 Once both full-run files exist the before/after table in README.md is regenerated.
 
 Cost: the whole command stops before it spends more than EVAL_BUDGET_USD (default $1). The judge is flash-lite with
@@ -16,7 +17,9 @@ import json
 import os
 import re
 import sys
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from langchain_core.callbacks import UsageMetadataCallbackHandler
@@ -74,15 +77,18 @@ def pick(tests: list[dict], argv: list[str]) -> list[dict]:
 
 
 def evaluate_mode(baseline: bool, tests: list[dict], budget: float = EVAL_BUDGET_USD,
-                  vs=None) -> tuple[dict, list[dict]]:
+                  vs=None, workers: int = 1) -> tuple[dict, list[dict]]:
+    """Answer and judge every question; `workers` > 1 asks several at once (same cost, less wall time; the
+    per-question seconds then include contention from the other requests)."""
     graph = build(max_attempts=0, vs=vs) if baseline else build(vs=vs)
     judge = llm(JUDGE_MODEL, 0).with_retry(stop_after_attempt=3)
-    judge_usage = UsageMetadataCallbackHandler()
-    spent, rows = 0.0, []
-    for i, t in enumerate(tests, 1):
-        if spent >= budget:
-            print(f"stopping: eval budget reached after {i - 1} questions")
-            break
+    spent, lock = [0.0], threading.Lock()
+
+    def one(i_t):
+        i, t = i_t
+        with lock:
+            if spent[0] >= budget:
+                return None
         for attempt in range(3):  # a throttled run (Vertex 429) waits and retries instead of killing the eval
             try:
                 start = time.perf_counter()
@@ -92,11 +98,11 @@ def evaluate_mode(baseline: bool, tests: list[dict], budget: float = EVAL_BUDGET
             except Exception as e:
                 if attempt == 2:
                     raise
-                print(f"  run failed ({type(e).__name__}: {str(e)[:80]}); retrying in 60s")
+                print(f"  run failed ({type(e).__name__}: {str(e)[:80]}); retrying in 60s", flush=True)
                 time.sleep(60)
         kind = t.get("type", "direct")
-        before = cost_of(judge_usage.usage_metadata)
-        cfg = {"callbacks": [judge_usage]}
+        usage = UsageMetadataCallbackHandler()  # per question, so parallel judges don't mix their costs
+        cfg = {"callbacks": [usage]}
         if kind == "unanswerable":
             reply = text(judge.invoke(ABSTAIN.format(q=t["question"], a=out["answer"]), config=cfg))
             row = {"abstained": reply.strip().lower().startswith("yes")}
@@ -105,18 +111,26 @@ def evaluate_mode(baseline: bool, tests: list[dict], budget: float = EVAL_BUDGET
             ctx = "\n\n".join(f"({label(d)})\n{d.page_content}" for d in out["docs"]) or "(none)"
             row = verdict(text(judge.invoke(JUDGE.format(q=t["question"], ref=t["ground_truth"], ctx=ctx,
                                                          a=out["answer"]), config=cfg)))
-        judge_cost = cost_of(judge_usage.usage_metadata) - before
+        judge_cost = cost_of(usage.usage_metadata)
         charge(judge_cost)  # the agent run charged itself; the judge goes on the same monthly ledger
         run_cost = cost_of(out["usage"]["by_model"])
-        spent += run_cost + judge_cost
-        row.update(type=kind, split=t.get("split", "dev"), grounded=out.get("grounded"),
+        with lock:
+            spent[0] += run_cost + judge_cost
+        row.update(type=kind, split=t.get("split", "dev"), format=t.get("format", "pdf"), file=t.get("file"),
+                   grounded=out.get("grounded"),
                    question=t["question"], answer=out["answer"], attempts=out["attempts"],
                    seconds=out["seconds"], cost_usd=round(run_cost, 6), trace_id=out.get("trace_id"),
                    contexts=[d.page_content for d in out["docs"]])
         print(f"[{i}/{len(tests)}] {kind:<12} attempts={out['attempts']} "
               f"{ {k: row[k] for k in ('correct', 'supported', 'retrieved', 'abstained') if k in row} } "
-              f"{t['question'][:50]}")
-        rows.append(row)
+              f"{t['question'][:50]}", flush=True)
+        return row
+
+    with ThreadPoolExecutor(max(1, workers)) as pool:
+        rows = [r for r in pool.map(one, enumerate(tests, 1)) if r is not None]
+    if len(rows) < len(tests):
+        print(f"stopping: eval budget reached after {len(rows)} questions")
+    spent = spent[0]
 
     if tracing():
         from langfuse import get_client
@@ -137,6 +151,8 @@ def summarize(rows: list[dict], spent: float) -> dict:
         part = [r for r in answerable if r["type"] == kind]
         if part:
             summary[f"correct [{kind}]"] = mean([r["correct"] for r in part])
+    for fmt in sorted({r.get("format", "pdf") for r in answerable}):
+        summary[f"correct [{fmt}]"] = mean([r["correct"] for r in answerable if r.get("format", "pdf") == fmt])
     for split in ("dev", "heldout"):
         part = [r for r in answerable if r["split"] == split]
         if part:
@@ -195,10 +211,11 @@ def main():
     all_tests = json.loads(Path("testset.json").read_text(encoding="utf-8"))
     tests = pick(all_tests, sys.argv)
     repeat = int(sys.argv[sys.argv.index("--repeat") + 1]) if "--repeat" in sys.argv else 1
+    workers = int(sys.argv[sys.argv.index("--workers") + 1]) if "--workers" in sys.argv else 1
     summaries, rows, spent = [], [], 0.0
     vs = store()  # one index connection for all repeats (the embedded index allows only one)
     for r in range(repeat):
-        summary, run_rows = evaluate_mode(baseline, tests, EVAL_BUDGET_USD - spent, vs)
+        summary, run_rows = evaluate_mode(baseline, tests, EVAL_BUDGET_USD - spent, vs, workers)
         spent += summary["eval_cost_usd"]
         summaries.append(summary)
         rows += [{**row, "run": r + 1} for row in run_rows]
