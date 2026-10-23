@@ -1,0 +1,434 @@
+[
+ {
+  "file": "adam.pdf",
+  "split": "dev",
+  "type": "messy",
+  "question": "What does the name Adam stand for?",
+  "ground_truth": "adaptive moment estimation",
+  "evidence": "The method computes individual adaptive learning rates for different parameters from estimates of first and second moments of the gradients; the name Adam is derived from adaptive moment estimation."
+ },
+ {
+  "file": "adam.pdf",
+  "split": "dev",
+  "type": "direct",
+  "question": "What is the formula for updating the exponential moving average vt at timestep t?",
+  "ground_truth": "v_t = beta2 * v_(t-1) + (1 - beta2) * g_t^2 (exponential moving average of squared gradients).",
+  "evidence": "vt = β2 · vt−1 + (1 − β2)· g\n2\nt"
+ },
+ {
+  "file": "adam.pdf",
+  "split": "dev",
+  "type": "messy",
+  "question": "What is the minibatch size used in the multi-layer neural network experiment?",
+  "ground_truth": "128",
+  "evidence": "with minibatch size of 128."
+ },
+ {
+  "file": "adam.pdf",
+  "split": "dev",
+  "type": "direct",
+  "question": "How does Adam compare to Adagrad in terms of convergence speed?",
+  "ground_truth": "Adam converges as fast as Adagrad.",
+  "evidence": "Adam converges as fast as Adagrad."
+ },
+ {
+  "file": "adam.pdf",
+  "split": "dev",
+  "type": "direct",
+  "question": "What is the bound on the magnitude of parameter updates with AdaMax?",
+  "ground_truth": "|∆t| ≤ α",
+  "evidence": "Also note that the magnitude of parameter updates has a simpler bound with AdaMax than Adam, namely: |∆t| ≤ α."
+ },
+ {
+  "file": "fw4.pdf",
+  "split": "dev",
+  "type": "direct",
+  "question": "What is the phone number to contact the SSA if your name on your social security card does not match your name on Form W-4?",
+  "ground_truth": "800-772-1213",
+  "evidence": "Does your name match the name on your social security card? If not, to ensure you get credit for your earnings, contact SSA at 800-772-1213 or go to www.ssa.gov."
+ },
+ {
+  "file": "fw4.pdf",
+  "split": "dev",
+  "type": "messy",
+  "question": "What is the deadline to submit a new Form W-4 if you claim exemption from withholding?",
+  "ground_truth": "February 16, 2027",
+  "evidence": "You will need to submit a new Form W-4 by February 16, 2027."
+ },
+ {
+  "file": "fw4.pdf",
+  "split": "dev",
+  "type": "direct",
+  "question": "What are the conditions to claim exemption from withholding for 2026?",
+  "ground_truth": "You had no federal income tax liability in 2025 and expect to have no federal income tax liability in 2026.",
+  "evidence": "You may claim exemption from withholding for 2026 if you meet both of the following conditions: you had no federal income tax liability in 2025 and you expect to have no federal income tax liability in 2026."
+ },
+ {
+  "file": "fw4.pdf",
+  "split": "dev",
+  "type": "vague",
+  "question": "If you have two jobs, what should you do to make sure your withholding is accurate?",
+  "ground_truth": "Submit a new Form W-4 for all other jobs if you have not updated your withholding since 2019.",
+  "evidence": "To be accurate, submit a new Form W-4 for all other jobs if you have not updated your withholding since 2019."
+ },
+ {
+  "file": "eiffel.html",
+  "split": "dev",
+  "type": "direct",
+  "question": "What is the architectural height of the Eiffel Tower?",
+  "ground_truth": "300 m (984 ft)",
+  "evidence": "Architectural 300 m (984 ft) [ 2 ]"
+ },
+ {
+  "file": "eiffel.html",
+  "split": "dev",
+  "type": "direct",
+  "question": "Who won the stair-climbing championship at the Eiffel Tower in 1905?",
+  "ground_truth": "Eugène Forestier",
+  "evidence": "The event was won by Eugène Forestier in 1905 and by Eugène Neveu in 1906."
+ },
+ {
+  "file": "eiffel.html",
+  "split": "dev",
+  "type": "direct",
+  "question": "When did analogue television signals from the Eiffel Tower cease?",
+  "ground_truth": "8 March 2011",
+  "evidence": "Analogue television signals from the Eiffel Tower ceased on 8 March 2011."
+ },
+ {
+  "file": "eiffel.html",
+  "split": "dev",
+  "type": "messy",
+  "question": "What was the height of the Eiffel Tower in meters after the work carried out in 2000?",
+  "ground_truth": "324 m",
+  "evidence": "Work carried out in 2000 added a further 5.3 m (17 ft) , giving a total height of 324 m (1,063 ft) ."
+ },
+ {
+  "file": "fastapi_readme.md",
+  "split": "dev",
+  "type": "vague",
+  "question": "What are the key features of FastAPI?",
+  "ground_truth": "Fast, Fast to code, Fewer bugs, Intuitive, Easy, Short, Robust, Standards-based.",
+  "evidence": "The key features are:\n\n* **Fast**: Very high performance, on par with **NodeJS** and **Go** (thanks to Starlette and Pydantic). [One of the fastest Python frameworks available](#performance)."
+ },
+ {
+  "file": "fastapi_readme.md",
+  "split": "dev",
+  "type": "messy",
+  "question": "What is the estimated reduction in human-induced errors when using FastAPI?",
+  "ground_truth": "about 40%",
+  "evidence": "* **Fewer bugs**: Reduce about 40% of human (developer) induced errors. *"
+ },
+ {
+  "file": "fastapi_readme.md",
+  "split": "dev",
+  "type": "direct",
+  "question": "What is the default URL for the API docs provided by Swagger UI?",
+  "ground_truth": "http://127.0.0.1:8000/docs",
+  "evidence": "API docs: http://127.0.0.1:8000/docs"
+ },
+ {
+  "file": "fastapi_readme.md",
+  "split": "dev",
+  "type": "messy",
+  "question": "How do you start the FastAPI server in development mode?",
+  "ground_truth": "uv run fastapi dev",
+  "evidence": "$ uv run fastapi dev"
+ },
+ {
+  "file": "fastapi_readme.md",
+  "split": "dev",
+  "type": "direct",
+  "question": "What are the two alternative user interfaces for automatic interactive API documentation?",
+  "ground_truth": "Swagger UI and ReDoc.",
+  "evidence": "Automatic interactive API documentation, including 2 alternative user interfaces:"
+ },
+ {
+  "file": "fastapi_readme.md",
+  "split": "dev",
+  "type": "messy",
+  "question": "What kind of data types can FastAPI convert from Python to network data like JSON?",
+  "ground_truth": "str, int, float, bool, list, datetime objects, UUID objects, Database models, and more.",
+  "evidence": "* Convert Python types (`str`, `int`, `float`, `bool`, `list`, etc)."
+ },
+ {
+  "file": "fastapi_readme.md",
+  "split": "dev",
+  "type": "direct",
+  "question": "What are the main dependencies of FastAPI?",
+  "ground_truth": "FastAPI depends on Pydantic and Starlette.",
+  "evidence": "FastAPI depends on Pydantic and Starlette."
+ },
+ {
+  "file": "fastapi_readme.md",
+  "split": "dev",
+  "type": "messy",
+  "question": "What is the license for this project?",
+  "ground_truth": "MIT license",
+  "evidence": "This project is licensed under the terms of the MIT license."
+ },
+ {
+  "file": "batchnorm.pdf",
+  "split": "heldout",
+  "type": "direct",
+  "question": "What phenomenon slows down the training of deep neural networks?",
+  "ground_truth": "Internal covariate shift.",
+  "evidence": "We refer to this phenomenon as internal covariate shift, and address the problem by normalizing layer in￾puts."
+ },
+ {
+  "file": "batchnorm.pdf",
+  "split": "heldout",
+  "type": "messy",
+  "question": "How much fewer training steps did Batch Normalization achieve for a state-of-the-art image classification model to reach the same accuracy?",
+  "ground_truth": "14 times fewer",
+  "evidence": "Applied to a state-of-the-art image classification model, Batch Normalization achieves the same accuracy with 14 times fewer training steps, and beats the original model by a significant margin."
+ },
+ {
+  "file": "batchnorm.pdf",
+  "split": "heldout",
+  "type": "direct",
+  "question": "What accuracy did Inception reach after 31 million training steps?",
+  "ground_truth": "72.2%",
+  "evidence": "Inception reached the accuracy of 72.2% after 31 · 106 training steps."
+ },
+ {
+  "file": "batchnorm.pdf",
+  "split": "heldout",
+  "type": "direct",
+  "question": "What is the output size for the first convolutional layer?",
+  "ground_truth": "112×112×64",
+  "evidence": "convolution* 7×7/2 112×112×64 1"
+ },
+ {
+  "file": "batchnorm.pdf",
+  "split": "heldout",
+  "type": "messy",
+  "question": "How much does the computational cost increase when 5x5 convolutional layers are replaced by two consecutive 3x3 convolutional layers?",
+  "ground_truth": "about 30%",
+  "evidence": "Also it increases the number of pa￾rameters by 25% and the computational cost is in￾creased by about 30%."
+ },
+ {
+  "file": "layernorm.pdf",
+  "split": "heldout",
+  "type": "direct",
+  "question": "What is the formula for the normalized summed inputs to a neuron in layer normalization?",
+  "ground_truth": "hi = f(gi / σi * (ai - µi) + bi)",
+  "evidence": "hi = f(\ngi\nσi\n(ai − µi) + bi) (5)"
+ },
+ {
+  "file": "layernorm.pdf",
+  "split": "heldout",
+  "type": "messy",
+  "question": "Which normalization method is invariant to re-scaling of the entire weight matrix?",
+  "ground_truth": "Layer norm",
+  "evidence": "Layer norm Invariant Invariant No Invariant No Invariant"
+ },
+ {
+  "file": "layernorm.pdf",
+  "split": "heldout",
+  "type": "messy",
+  "question": "How much faster does layer normalization converge compared to the baseline model?",
+  "ground_truth": "60% of the time",
+  "evidence": "We observe that layer normalization offers a per-iteration speedup across all metrics and converges to its best validation model in 60% of the time it takes the baseline model to do so."
+ },
+ {
+  "file": "layernorm.pdf",
+  "split": "heldout",
+  "type": "direct",
+  "question": "How many handwriting line sequences are there in total in the IAM-OnDB dataset?",
+  "ground_truth": "12179",
+  "evidence": "There are, in total, 12179 handwriting line sequences."
+ },
+ {
+  "file": "layernorm.pdf",
+  "split": "heldout",
+  "type": "messy",
+  "question": "What's the approximate total number of weights in the model described?",
+  "ground_truth": "3.7M",
+  "evidence": "The total number of weights was increased to approximately 3.7M."
+ },
+ {
+  "file": "layernorm.pdf",
+  "split": "heldout",
+  "type": "direct",
+  "question": "What are the initial values for the additive and multiplicative parameters in Layer Normalization?",
+  "ground_truth": "Each αi is initialized to a vector of zeros and each βi is initialized to a vector of ones.",
+  "evidence": "Each αi is initialized to a vector of zeros and each βi is initialized to a vector of ones."
+ },
+ {
+  "file": "nist_csf2.pdf",
+  "split": "heldout",
+  "type": "direct",
+  "question": "What is the NIST Cybersecurity Framework (CSF) 2.0?",
+  "ground_truth": "The NIST Cybersecurity Framework (CSF) 2.0 provides guidance to industry, government agencies, and other organizations to manage cybersecurity risks.",
+  "evidence": "The NIST Cybersecurity Framework (CSF) 2.0 provides guidance to industry, government agencies, and other organizations to manage cybersecurity risks."
+ },
+ {
+  "file": "nist_csf2.pdf",
+  "split": "heldout",
+  "type": "messy",
+  "question": "What was the Cybersecurity Framework called before version 2.0?",
+  "ground_truth": "Framework for Improving Critical Infrastructure Cybersecurity",
+  "evidence": "Before version 2.0, the Cybersecurity Framework was called the “Framework for Improving Critical Infrastructure Cybersecurity.”"
+ },
+ {
+  "file": "nist_csf2.pdf",
+  "split": "heldout",
+  "type": "direct",
+  "question": "What does the DETECT Function enable?",
+  "ground_truth": "The timely discovery and analysis of anomalies, indicators of compromise, and other potentially adverse events that may indicate that cybersecurity attacks and incidents are occurring.",
+  "evidence": "DETECT enables the timely discovery and analysis of anomalies, indicators of compromise, and other potentially adverse events that may indicate that cybersecurity attacks and incidents are occurring."
+ },
+ {
+  "file": "nist_csf2.pdf",
+  "split": "heldout",
+  "type": "messy",
+  "question": "When should actions supporting RESPOND and RECOVER happen?",
+  "ground_truth": "They should be ready at all times and happen when cybersecurity incidents occur.",
+  "evidence": "actions that support RESPOND and RECOVER should be ready at all times and happen when cybersecurity incidents occur."
+ },
+ {
+  "file": "nist_csf2.pdf",
+  "split": "heldout",
+  "type": "direct",
+  "question": "What NIST Interagency Report focuses on identifying and estimating cybersecurity risk for Enterprise Risk Management?",
+  "ground_truth": "IR 8286A",
+  "evidence": "IR 8286A, Identifying and Estimating Cybersecurity Risk for Enterprise Risk Management"
+ },
+ {
+  "file": "nist_csf2.pdf",
+  "split": "heldout",
+  "type": "vague",
+  "question": "What kind of risk can be integrated with cybersecurity risk management at a high level?",
+  "ground_truth": "all other risk management efforts",
+  "evidence": "Some organizations integrate ICT and all other risk management efforts at a high level by using ERM, while others keep the efforts separate to ensure adequate attention on each."
+ },
+ {
+  "file": "nist_csf2.pdf",
+  "split": "heldout",
+  "type": "direct",
+  "question": "What is the ID for the control that requires inventories of software, services, and systems managed by the organization?",
+  "ground_truth": "ID.AM-02",
+  "evidence": "ID.AM-02: Inventories of software, services, and systems managed by the organization are maintained"
+ },
+ {
+  "file": "nist_csf2.pdf",
+  "split": "heldout",
+  "type": "messy",
+  "question": "How are assets prioritized according to the document?",
+  "ground_truth": "based on classification, criticality, resources, and impact on the mission",
+  "evidence": "o ID.AM-05: Assets are prioritized based on classification, criticality, resources, and impact on the mission"
+ },
+ {
+  "file": "nist_csf2.pdf",
+  "split": "heldout",
+  "type": "direct",
+  "question": "What are the six CSF Functions?",
+  "ground_truth": "Govern, Identify, Protect, Detect, Respond, and Recover.",
+  "evidence": "There are six CSF Functions: Govern, Identify, Protect, Detect, Respond, and Recover."
+ },
+ {
+  "file": "nist_csf2.pdf",
+  "split": "heldout",
+  "type": "messy",
+  "question": "How many Tiers are there for characterizing cybersecurity risk governance and management practices?",
+  "ground_truth": "four",
+  "evidence": "There are four Tiers: Partial (Tier 1), Risk Informed (Tier 2), Repeatable (Tier 3), and Adaptive (Tier 4)."
+ },
+ {
+  "file": "fomc.html",
+  "split": "heldout",
+  "type": "direct",
+  "question": "What is the Committee's objective for inflation over the longer run?",
+  "ground_truth": "2 percent",
+  "evidence": "The Committee seeks to achieve maximum employment and inflation at the rate of 2 percent over the longer run."
+ },
+ {
+  "file": "fomc.html",
+  "split": "heldout",
+  "type": "messy",
+  "question": "By how much did the Committee lower the target range for the federal funds rate?",
+  "ground_truth": "1/2 percentage point",
+  "evidence": "In light of the progress on inflation and the balance of risks, the Committee decided to lower the target range for the federal funds rate by 1/2 percentage point to 4-3/4 to 5 percent."
+ },
+ {
+  "file": "fomc.html",
+  "split": "heldout",
+  "type": "direct",
+  "question": "Who voted against the monetary policy action?",
+  "ground_truth": "Michelle W. Bowman",
+  "evidence": "Voting against this action was Michelle W. Bowman, who preferred to lower the target range for the federal funds rate by 1/4 percentage point at this meeting."
+ },
+ {
+  "file": "fomc.html",
+  "split": "heldout",
+  "type": "messy",
+  "question": "What was the preferred action of the person who voted against the policy?",
+  "ground_truth": "lower the target range for the federal funds rate by 1/4 percentage point",
+  "evidence": "Voting against this action was Michelle W. Bowman, who preferred to lower the target range for the federal funds rate by 1/4 percentage point at this meeting."
+ },
+ {
+  "file": "mars.html",
+  "split": "heldout",
+  "type": "direct",
+  "question": "What is the equatorial radius of Mars in kilometers?",
+  "ground_truth": "3396.2",
+  "evidence": "Equatorial radius (km) 3396.2 6378.1 0.532"
+ },
+ {
+  "file": "mars.html",
+  "split": "heldout",
+  "type": "vague",
+  "question": "Roughly how much does Mars weigh compared to Earth?",
+  "ground_truth": "about a tenth",
+  "evidence": "Mass (10 24 kg) 0.64169 5.9722 0.107"
+ },
+ {
+  "file": "mars.html",
+  "split": "heldout",
+  "type": "direct",
+  "question": "What is the semimajor axis of Mars' orbit in AU?",
+  "ground_truth": "1.52366231",
+  "evidence": "Semimajor axis (AU) 1.52366231"
+ },
+ {
+  "file": "mars.html",
+  "split": "heldout",
+  "type": "messy",
+  "question": "Roughly how much does the surface pressure of Mars' atmosphere vary?",
+  "ground_truth": "4.0 to 8.7 mb",
+  "evidence": "Surface pressure: 6.36 mb at mean radius (variable from 4.0 to 8.7 mb depending on season)"
+ },
+ {
+  "file": "mars.html",
+  "split": "heldout",
+  "type": "messy",
+  "question": "Roughly how dense is the Martian atmosphere?",
+  "ground_truth": "~0.016 +/- 0.006 kg/m 3",
+  "evidence": "Surface density: ~0.016 +/- 0.006 kg/m 3"
+ },
+ {
+  "file": "mars.html",
+  "split": "heldout",
+  "type": "direct",
+  "question": "What is the average temperature on Mars?",
+  "ground_truth": "~214 K (-59 C)",
+  "evidence": "Average temperature: ~214 K (-59 C)"
+ },
+ {
+  "file": "mars.html",
+  "split": "heldout",
+  "type": "messy",
+  "question": "How fast do winds blow on Mars during a dust storm?",
+  "ground_truth": "17-30 m/s",
+  "evidence": "Wind speeds: 2-7 m/s (summer), 5-10 m/s (fall), 17-30 m/s (dust storm) (Viking Lander sites)"
+ },
+ {
+  "file": "mars.html",
+  "split": "heldout",
+  "type": "direct",
+  "question": "What is the orbital inclination of Mars in degrees?",
+  "ground_truth": "1.08",
+  "evidence": "Orbital inclination (deg) 1.08 1.79"
+ }
+]

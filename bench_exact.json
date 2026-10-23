@@ -1,0 +1,380 @@
+[
+ {
+  "file": "sp500_constituents.csv",
+  "type": "messy",
+  "split": "dev",
+  "question": "In the S&P 500 constituents list, what GICS sector is F5, Inc. (FFIV) in, and where is it headquartered?",
+  "ground_truth": "Information Technology; headquartered in Seattle, Washington."
+ },
+ {
+  "file": "sp500_constituents.csv",
+  "type": "messy",
+  "split": "dev",
+  "question": "In the S&P 500 constituents list, what GICS sector is Fox Corporation (Class B) (FOX) in, and where is it headquartered?",
+  "ground_truth": "Communication Services; headquartered in New York City, New York."
+ },
+ {
+  "file": "sp500_constituents.csv",
+  "type": "messy",
+  "split": "dev",
+  "question": "In the S&P 500 constituents list, what GICS sector is Solventum (SOLV) in, and where is it headquartered?",
+  "ground_truth": "Health Care; headquartered in Saint Paul, Minnesota."
+ },
+ {
+  "file": "sp500_constituents.csv",
+  "type": "messy",
+  "split": "dev",
+  "question": "In the S&P 500 constituents list, what GICS sector is Procter & Gamble (PG) in, and where is it headquartered?",
+  "ground_truth": "Consumer Staples; headquartered in Cincinnati, Ohio."
+ },
+ {
+  "file": "sp500_constituents.csv",
+  "type": "messy",
+  "split": "dev",
+  "question": "In the S&P 500 constituents list, what GICS sector is Devon Energy (DVN) in, and where is it headquartered?",
+  "ground_truth": "Energy; headquartered in Oklahoma City, Oklahoma."
+ },
+ {
+  "file": "sp500_constituents.csv",
+  "type": "messy",
+  "split": "dev",
+  "question": "In the S&P 500 constituents list, what GICS sector is Intel (INTC) in, and where is it headquartered?",
+  "ground_truth": "Information Technology; headquartered in Santa Clara, California."
+ },
+ {
+  "file": "sp500_constituents.csv",
+  "type": "direct",
+  "split": "dev",
+  "question": "Which company has the ticker symbol TDG in the S&P 500 constituents list?",
+  "ground_truth": "TransDigm Group."
+ },
+ {
+  "file": "sp500_constituents.csv",
+  "type": "direct",
+  "split": "dev",
+  "question": "Which company has the ticker symbol LITE in the S&P 500 constituents list?",
+  "ground_truth": "Lumentum."
+ },
+ {
+  "file": "sp500_constituents.csv",
+  "type": "direct",
+  "split": "dev",
+  "question": "Which company has the ticker symbol JNJ in the S&P 500 constituents list?",
+  "ground_truth": "Johnson & Johnson."
+ },
+ {
+  "file": "sp500_constituents.csv",
+  "type": "direct",
+  "split": "dev",
+  "question": "Which company has the ticker symbol EXE in the S&P 500 constituents list?",
+  "ground_truth": "Expand Energy."
+ },
+ {
+  "file": "world_gdp_2015_2022.xlsx",
+  "type": "messy",
+  "split": "heldout",
+  "question": "In the GDP spreadsheet, what was Canada's GDP in 2022 (current US dollars)?",
+  "ground_truth": "2,161,483,369,422 US dollars."
+ },
+ {
+  "file": "world_gdp_2015_2022.xlsx",
+  "type": "messy",
+  "split": "heldout",
+  "question": "In the GDP spreadsheet, what was Germany's GDP in 2022 (current US dollars)?",
+  "ground_truth": "4,082,469,490,798 US dollars."
+ },
+ {
+  "file": "world_gdp_2015_2022.xlsx",
+  "type": "messy",
+  "split": "heldout",
+  "question": "In the GDP spreadsheet, what was Turkiye's GDP in 2022 (current US dollars)?",
+  "ground_truth": "907,118,435,953 US dollars."
+ },
+ {
+  "file": "world_gdp_2015_2022.xlsx",
+  "type": "messy",
+  "split": "heldout",
+  "question": "In the GDP spreadsheet, what was United States's GDP in 2018 (current US dollars)?",
+  "ground_truth": "20,656,516,000,000 US dollars."
+ },
+ {
+  "file": "world_gdp_2015_2022.xlsx",
+  "type": "messy",
+  "split": "heldout",
+  "question": "In the GDP spreadsheet, what was Netherlands's GDP in 2017 (current US dollars)?",
+  "ground_truth": "833,869,641,687 US dollars."
+ },
+ {
+  "file": "world_gdp_2015_2022.xlsx",
+  "type": "messy",
+  "split": "heldout",
+  "question": "In the GDP spreadsheet, what was Brazil's GDP in 2022 (current US dollars)?",
+  "ground_truth": "1,951,923,942,083 US dollars."
+ },
+ {
+  "file": "world_gdp_2015_2022.xlsx",
+  "type": "messy",
+  "split": "heldout",
+  "question": "In the GDP spreadsheet, what was Mexico's GDP in 2017 (current US dollars)?",
+  "ground_truth": "1,190,721,475,906 US dollars."
+ },
+ {
+  "file": "world_gdp_2015_2022.xlsx",
+  "type": "messy",
+  "split": "heldout",
+  "question": "In the GDP spreadsheet, what was Korea, Rep.'s GDP in 2016 (current US dollars)?",
+  "ground_truth": "1,499,679,823,910 US dollars."
+ },
+ {
+  "file": "world_gdp_2015_2022.xlsx",
+  "type": "messy",
+  "split": "heldout",
+  "question": "In the GDP spreadsheet, what was Poland's GDP in 2022 (current US dollars)?",
+  "ground_truth": "689,763,329,458 US dollars."
+ },
+ {
+  "file": "world_gdp_2015_2022.xlsx",
+  "type": "messy",
+  "split": "heldout",
+  "question": "In the GDP spreadsheet, what was United Kingdom's GDP in 2019 (current US dollars)?",
+  "ground_truth": "2,851,407,164,908 US dollars."
+ },
+ {
+  "file": "us_constitution.docx",
+  "type": "direct",
+  "split": "dev",
+  "question": "According to the Constitution, how old must a Representative be?",
+  "ground_truth": "Twenty five years."
+ },
+ {
+  "file": "us_constitution.docx",
+  "type": "direct",
+  "split": "dev",
+  "question": "How old must a Senator be, and for how many years must they have been a citizen?",
+  "ground_truth": "Thirty years old and nine years a citizen of the United States."
+ },
+ {
+  "file": "us_constitution.docx",
+  "type": "direct",
+  "split": "dev",
+  "question": "How many Senators does each State have, and how long is their term?",
+  "ground_truth": "Two Senators from each State, for six years."
+ },
+ {
+  "file": "us_constitution.docx",
+  "type": "direct",
+  "split": "dev",
+  "question": "What is the minimum age to be eligible for President?",
+  "ground_truth": "Thirty five years."
+ },
+ {
+  "file": "us_constitution.docx",
+  "type": "direct",
+  "split": "dev",
+  "question": "How many States had to ratify the Constitution for it to be established?",
+  "ground_truth": "The ratification of the Conventions of nine States."
+ },
+ {
+  "file": "us_constitution.docx",
+  "type": "direct",
+  "split": "dev",
+  "question": "What does the Preamble say the Constitution is ordained to do first?",
+  "ground_truth": "To form a more perfect Union."
+ },
+ {
+  "file": "apollo11_mission.pptx",
+  "type": "direct",
+  "split": "heldout",
+  "question": "Who were the three Apollo 11 astronauts and their roles?",
+  "ground_truth": "Neil Armstrong (commander), Buzz Aldrin (lunar module pilot), Michael Collins (command module pilot)."
+ },
+ {
+  "file": "apollo11_mission.pptx",
+  "type": "direct",
+  "split": "heldout",
+  "question": "When and from where did Apollo 11 launch?",
+  "ground_truth": "July 16, 1969, from Kennedy Space Center."
+ },
+ {
+  "file": "apollo11_mission.pptx",
+  "type": "direct",
+  "split": "heldout",
+  "question": "What were the names of the command module and lunar module?",
+  "ground_truth": "Columbia and Eagle."
+ },
+ {
+  "file": "apollo11_mission.pptx",
+  "type": "direct",
+  "split": "heldout",
+  "question": "Where did the lunar module land and on what date?",
+  "ground_truth": "The Sea of Tranquility, July 20, 1969."
+ },
+ {
+  "file": "apollo11_mission.pptx",
+  "type": "direct",
+  "split": "heldout",
+  "question": "How did the mission end?",
+  "ground_truth": "Splashdown in the Pacific Ocean on July 24, 1969; recovered by USS Hornet."
+ },
+ {
+  "file": "apollo11_mission.pptx",
+  "type": "direct",
+  "split": "heldout",
+  "question": "What rocket launched Apollo 11?",
+  "ground_truth": "Saturn V."
+ },
+ {
+  "file": "tallest_buildings.png",
+  "type": "messy",
+  "split": "heldout",
+  "question": "In the tallest buildings image, how tall is Ping An Finance Centre and in which city is it?",
+  "ground_truth": "599.1 m; Shenzhen."
+ },
+ {
+  "file": "tallest_buildings.png",
+  "type": "messy",
+  "split": "heldout",
+  "question": "In the tallest buildings image, how tall is Merdeka Maybank Tower and in which city is it?",
+  "ground_truth": "678.9 m; Kuala Lumpur."
+ },
+ {
+  "file": "tallest_buildings.png",
+  "type": "messy",
+  "split": "heldout",
+  "question": "In the tallest buildings image, how tall is Lotte World Tower and in which city is it?",
+  "ground_truth": "554.5 m; Seoul."
+ },
+ {
+  "file": "tallest_buildings.png",
+  "type": "messy",
+  "split": "heldout",
+  "question": "In the tallest buildings image, how tall is Burj Khalifa and in which city is it?",
+  "ground_truth": "828.0 m; Dubai."
+ },
+ {
+  "file": "tallest_buildings.png",
+  "type": "messy",
+  "split": "heldout",
+  "question": "In the tallest buildings image, how tall is Guangzhou CTF Finance Centre and in which city is it?",
+  "ground_truth": "530.0 m; Guangzhou."
+ },
+ {
+  "file": "tallest_buildings.png",
+  "type": "messy",
+  "split": "heldout",
+  "question": "In the tallest buildings image, how tall is Shanghai Tower and in which city is it?",
+  "ground_truth": "632.0 m; Shanghai."
+ },
+ {
+  "file": "tallest_buildings.png",
+  "type": "messy",
+  "split": "heldout",
+  "question": "In the tallest buildings image, how many floors does Tianjin CTF Finance Centre have and when was it completed?",
+  "ground_truth": "97 floors; completed in 2019."
+ },
+ {
+  "file": "tallest_buildings.png",
+  "type": "messy",
+  "split": "heldout",
+  "question": "In the tallest buildings image, how many floors does Merdeka Maybank Tower have and when was it completed?",
+  "ground_truth": "118 floors; completed in 2024."
+ },
+ {
+  "file": "tallest_buildings.png",
+  "type": "messy",
+  "split": "heldout",
+  "question": "In the tallest buildings image, how many floors does Guangzhou CTF Finance Centre have and when was it completed?",
+  "ground_truth": "111 floors; completed in 2016."
+ },
+ {
+  "file": "tallest_buildings.png",
+  "type": "messy",
+  "split": "heldout",
+  "question": "In the tallest buildings image, how many floors does Burj Khalifa have and when was it completed?",
+  "ground_truth": "163 floors; completed in 2010."
+ },
+ {
+  "file": "declaration_scan.pdf",
+  "type": "messy",
+  "split": "dev",
+  "question": "On what date was the Declaration adopted in Congress, according to the scan?",
+  "ground_truth": "July 4, 1776."
+ },
+ {
+  "file": "declaration_scan.pdf",
+  "type": "messy",
+  "split": "dev",
+  "question": "How many united States of America does the Declaration's title refer to?",
+  "ground_truth": "Thirteen."
+ },
+ {
+  "file": "declaration_scan.pdf",
+  "type": "messy",
+  "split": "dev",
+  "question": "According to the Declaration, what unalienable Rights are named?",
+  "ground_truth": "Life, Liberty and the pursuit of Happiness."
+ },
+ {
+  "file": "declaration_scan.pdf",
+  "type": "messy",
+  "split": "dev",
+  "question": "From what do governments derive their just powers, per the Declaration?",
+  "ground_truth": "From the consent of the governed."
+ },
+ {
+  "file": "declaration_scan.pdf",
+  "type": "messy",
+  "split": "dev",
+  "question": "Who is described as having a history of repeated injuries and usurpations?",
+  "ground_truth": "The present King of Great Britain."
+ },
+ {
+  "file": "invoice_INV-2025-0417.pdf",
+  "type": "messy",
+  "split": "dev",
+  "question": "What is the invoice number and when is payment due?",
+  "ground_truth": "INV-2025-0417; due 13 April 2025 (Net 30)."
+ },
+ {
+  "file": "invoice_INV-2025-0417.pdf",
+  "type": "messy",
+  "split": "dev",
+  "question": "What is the total due on the invoice?",
+  "ground_truth": "$4,418.00."
+ },
+ {
+  "file": "invoice_INV-2025-0417.pdf",
+  "type": "messy",
+  "split": "dev",
+  "question": "What is the subtotal before tax and the tax amount?",
+  "ground_truth": "$4,081.29 subtotal; $336.71 tax (8.25%)."
+ },
+ {
+  "file": "invoice_INV-2025-0417.pdf",
+  "type": "messy",
+  "split": "dev",
+  "question": "How many pallet jacks were ordered and at what unit price?",
+  "ground_truth": "2 at $412.00 each."
+ },
+ {
+  "file": "invoice_INV-2025-0417.pdf",
+  "type": "messy",
+  "split": "dev",
+  "question": "What is the line total for the LED high-bay lights?",
+  "ground_truth": "$1,027.20 (16 x $64.20)."
+ },
+ {
+  "file": "invoice_INV-2025-0417.pdf",
+  "type": "messy",
+  "split": "dev",
+  "question": "Who is the invoice billed to?",
+  "ground_truth": "Harbor Logistics Co., 88 Quay Street, Portland, OR."
+ },
+ {
+  "file": "invoice_INV-2025-0417.pdf",
+  "type": "messy",
+  "split": "dev",
+  "question": "What is the late payment penalty?",
+  "ground_truth": "1.5% interest per month."
+ }
+]

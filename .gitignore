@@ -8,3 +8,6 @@ eval_details_*.json
 spend.json
 state/
 qdrant_storage/
+redis_data/
+data/bench/
+spend.json.lock

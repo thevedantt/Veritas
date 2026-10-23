@@ -9,3 +9,4 @@ __pycache__
 *.log
 eval_details_*.json
 qdrant_storage
+redis_data
