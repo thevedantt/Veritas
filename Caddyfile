@@ -1,7 +1,11 @@
-# HTTPS in front of the app; flush_interval -1 streams answers (server-sent events) without buffering.
+# HTTPS in front of the app copies. `dynamic a` re-resolves the "app" service name, so every replica gets
+# traffic; flush_interval -1 streams answers (server-sent events) without buffering.
 {$DOMAIN} {
 	encode gzip
-	reverse_proxy veritas:8000 {
+	reverse_proxy {
+		dynamic a app 8000
+		lb_policy round_robin
+		health_uri /api/health
 		flush_interval -1
 	}
 }

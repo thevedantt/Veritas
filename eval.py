@@ -181,7 +181,8 @@ def readme_table(before: dict, after: dict) -> str:
         else:
             lines.append(f"| {k} | {b:.4g} | {a:.4g} | {a - b:+.4g} |")
     spread = "; ".join(f"{k}: baseline {before.get(k, '–')}, agent {after[k]}" for k in after if "min-max" in k)
-    runs = f"mean of {after.get('runs', 1)} runs" + (f" (spread {spread})" if spread else "")
+    n_runs = after.get('runs', 1)
+    runs = (f"mean of {n_runs} runs" if n_runs > 1 else "1 run") + (f" (spread {spread})" if spread else "")
     lines.append(f"\n_{after['n']} questions from `testset.json` (direct, vague, messy scanned tables, unanswerable; "
                  f"`heldout` = documents never used for tuning), {runs}, "
                  f"graded by `{JUDGE_MODEL}` against reference answers; unanswerable questions are scored on "
@@ -233,7 +234,7 @@ def main():
     out_file.write_text(json.dumps(summary, indent=2))
     a, b = Path("scores_agentic.json"), Path("scores_baseline.json")
     readme = Path("README.md")
-    if a.exists() and b.exists() and readme.exists():
+    if a.exists() and b.exists() and readme.exists() and "<!-- scores:start -->" in readme.read_text(encoding="utf-8"):
         table = readme_table(json.loads(b.read_text()), json.loads(a.read_text()))
         text_ = re.sub(r"(<!-- scores:start -->).*?(<!-- scores:end -->)",
                        lambda m: f"{m[1]}\n{table}\n{m[2]}", readme.read_text(encoding="utf-8"), flags=re.S)

@@ -7,3 +7,4 @@ anthropic[vertex]
 langgraph
 langfuse
 python-dotenv
+redis>=5  # only used when REDIS_URL is set (scaled-out deploy)

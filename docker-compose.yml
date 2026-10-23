@@ -1,19 +1,46 @@
 # docker compose up -d --build   ->  https://$DOMAIN  (Caddy gets a TLS certificate automatically)
 # Needs .env (see .env.example; set APP_PASSWORD for a public site) and GCP_KEY_FILE = service-account key path.
-# Untested here: the dev machine has no Docker.
+#
+# Scaled-out layout: Caddy load-balances 2 stateless app processes; one worker parses uploads; Redis holds the
+# shared cache, rate limits and upload queue; Qdrant holds the index. Add app copies with `--scale app=N`.
+x-app: &app
+  build: .
+  env_file: .env
+  environment:
+    GOOGLE_APPLICATION_CREDENTIALS: /secrets/gcp-key.json
+    QDRANT_URL: http://qdrant:6333
+    REDIS_URL: redis://redis:6379/0
+    SPEND_FILE: /app/state/spend.json
+  volumes:
+    - ./uploads:/app/uploads             # original files (the worker reads them)
+    - ./state:/app/state                 # spend.json, shared and file-locked
+    - ${GCP_KEY_FILE:?set GCP_KEY_FILE to the key path}:/secrets/gcp-key.json:ro
+  depends_on: [qdrant, redis]
+  restart: unless-stopped
+
 services:
-  veritas:
-    build: .
-    env_file: .env
+  app:
+    <<: *app
     environment:
       GOOGLE_APPLICATION_CREDENTIALS: /secrets/gcp-key.json
-      QDRANT_URL: http://qdrant:6333     # shared index server instead of the embedded folder
+      QDRANT_URL: http://qdrant:6333
+      REDIS_URL: redis://redis:6379/0
+      SPEND_FILE: /app/state/spend.json
+      RUN_WORKER: "0"                    # uploads go to the worker service
+    deploy:
+      replicas: 2
+    mem_limit: 1g                        # chat only: models are remote, the reranker is small
+
+  worker:
+    <<: *app
+    command: ["python", "worker.py"]
+    mem_limit: 3g                        # Docling parsing peaks around 1.5 GB
+
+  redis:
+    image: redis:7.4-alpine
+    command: ["redis-server", "--appendonly", "yes"]   # queued uploads survive a restart
     volumes:
-      - ./uploads:/app/uploads           # original files
-      - ./state:/app/state               # spend.json (monthly cost ledger)
-      - ${GCP_KEY_FILE:?set GCP_KEY_FILE to the key path}:/secrets/gcp-key.json:ro
-    depends_on: [qdrant]
-    mem_limit: 4g                        # Docling parsing peaks around 1.5 GB
+      - ./redis_data:/data
     restart: unless-stopped
 
   qdrant:
@@ -22,7 +49,7 @@ services:
       - ./qdrant_storage:/qdrant/storage
     restart: unless-stopped
 
-  caddy:                                 # HTTPS reverse proxy in front of the app
+  caddy:                                 # HTTPS + load balancing across the app copies
     image: caddy:2.8.4
     ports: ["80:80", "443:443"]
     environment:
@@ -30,7 +57,7 @@ services:
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
-    depends_on: [veritas]
+    depends_on: [app]
     restart: unless-stopped
 
 volumes:
