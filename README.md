@@ -4,15 +4,18 @@ Veritas is a RAG agent for messy PDFs with tables. It reranks what it retrieves,
 when the passages don't hold the answer, checks that the answer is grounded, traces every step, and is scored
 against a fixed test set. It runs under a hard $5/month AI budget.
 
-**At a glance** (33-question test set over a research paper and a partly scanned IRS tax table PDF):
+**At a glance** (167-question benchmark over 20 documents in 10 formats; 82 questions on 10 documents never used
+for tuning):
 
 | | Value |
 |---|---|
-| Correct answers | 25-26 of 30 answerable; 100% abstention on the 3 unanswerable questions |
-| Latency | first word ~1.5-2 s, full checked answer ~4-5 s; plain mode ~1-2 s; repeat questions instant |
-| Cost | ~$0.0005-0.001 per question; $0 for cached answers; ~$0.005 per scanned page at upload |
-| Upload | ~5 s per digital page on a laptop CPU; first pages searchable within ~30-40 s |
-| Budget | hard monthly cap (`MONTHLY_BUDGET_USD`, default $5), per-client rate limits |
+| Correct answers | 95.3% for the agent (94.2-96.2% over 3 runs; 96.8% after the prompt-injection guard) vs 91.0% for plain retrieval |
+| Never-tuned documents | 97.0% correct (90.9% plain retrieval); Excel, PowerPoint and image formats, seen only there, all 100% |
+| Grounding | 99.4% of answers supported by their passages; all 11 unanswerable questions answered "not found" |
+| Latency | median 2.6-9.4 s per checked answer depending on Gemini load (plain mode ~1 s); answers stream as written |
+| Cost | ~$0.001 per question; $0 for cached answers; ~$0.005 per scanned page at upload |
+| Safety | prompt-injection guard (tested: an embedded "ignore all instructions" was ignored), CSRF and browser hardening |
+| Budget | hard monthly cap (`MONTHLY_BUDGET_USD`, default $5), per-client rate limits, optional password |
 
 | Piece | Tool | File |
 |---|---|---|
@@ -71,7 +74,7 @@ answer.
 - **Uploads:** digital pages parse locally for $0. Scanned pages cost about $0.005 each, at most
   `SCAN_MAX_PAGES` (10) per document; the rest use Docling OCR.
 - **Evals:** `eval.py` uses one `gemini-2.5-flash-lite` judge call per question and stops at
-  `EVAL_BUDGET_USD` (default $1); a full 33-question run costs about $0.03-0.05. Use `--type` / `--limit`
+  `EVAL_BUDGET_USD` (default $1); a full 53-question run costs about $0.06-0.07 (measured). Use `--type` / `--limit`
   to test a subset. (The earlier Ragas + `gemini-2.5-pro` judge made 10-20 billed thinking calls per
   question and cost several dollars a run.)
 
@@ -83,8 +86,11 @@ answer.
   reranker (no API call), fallback model with a cooldown circuit breaker, pages indexed in batches during upload.
 - **Accuracy:** hybrid search + reranking, table-aware chunking, vision transcription for scanned pages,
   targeted retry for partial answers, grounding check by a second model, "not found" instead of guessing.
-- **Safety:** per-client rate limits (20 questions/min, 10 uploads/hour), upload type whitelist and 50 MB
-  limit, content-hash dedupe, model and document text never rendered as HTML, secrets only in `.env`.
+- **Safety:** prompt-injection guard (rules in a system message; document text wrapped in `<passage>` tags as
+  untrusted data; instruction-like passages flagged at ingest and to the model; the grounding check rejects
+  answers that obey document instructions), CSRF origin check, CSP / no-framing / nosniff headers, per-client
+  rate limits (20 questions/min, 10 uploads/hour), upload type whitelist and 50 MB limit, optional password,
+  model and document text never rendered as HTML, secrets only in `.env`. Gemini's default safety filters stay on.
 - **Operations:** `/api/health`, `/api/stats` (spend vs cap), Langfuse traces with per-question scores,
   offline unit checks, a reproducible eval with a before/after table.
 
@@ -94,7 +100,7 @@ answer.
 |---|---|---|
 | `gemini-2.5-flash` writes, `flash-lite` checks | ~half the price of 3.x Flash, stable | 3.7 Flash got 2 more of 30 right |
 | Thinking off everywhere | seconds faster, no billed reasoning tokens | weaker multi-step table reasoning |
-| Self-correcting agent vs plain retrieve-generate | grounding check, retries, partial-answer search | ~3 s slower per question |
+| Self-correcting agent vs plain retrieve-generate | +7 points correct (94.5% vs 87.5%), 100% grounded | median 2.6-9.4 s vs ~1 s per question |
 | Vision model for scanned pages | correct cells on noisy scans | ~$0.005/page, capped at 10 pages/doc |
 | Embedded Qdrant, in-process cache and rate limits | zero infrastructure | one server process; Qdrant server + Redis to scale out |
 | One cheap judge call per eval question | ~$0.04 per full eval (was several dollars) | coarser metrics than Ragas |
@@ -114,11 +120,33 @@ ledger (file-locked) and index can be shared; Caddy terminates TLS and streams a
 uptime checks. Give the VM at least 4 GB RAM (parsing peaks around 1.5 GB). The Docker files have not been run
 yet: the dev machine has no Docker.
 
+## Scaling
+
+Two modes, same code:
+
+| | Single process (default) | Scaled out (`docker compose`) |
+|---|---|---|
+| App | one `python server.py` | N stateless app copies behind Caddy (`--scale app=N`) |
+| Uploads | background thread | separate `python worker.py` process (`RUN_WORKER=0` on app copies) |
+| Cache, rate limits, job queue | in-process | Redis (`REDIS_URL`) |
+| Index | embedded Qdrant folder | Qdrant server (`QDRANT_URL`) |
+| Spend ledger | `spend.json` | same file, shared volume, OS file lock |
+
+What sets capacity:
+- **Chat** spends most of its time waiting on Gemini (local search + rerank take ~0.5-1 s of a 3-9 s answer), so one 2-vCPU copy can handle
+  dozens of concurrent questions (threads, streamed responses). The local reranker is the main CPU cost per
+  question.
+- **Vertex AI quota** (requests and tokens per minute) is the real ceiling under load; the app retries 429s with
+  backoff and tells the user the model is busy instead of hanging. Raise the quota in the GCP console.
+- **Uploads** are CPU-bound (~5 s per page); add worker processes for more parallel uploads (each ~1.5 GB RAM).
+- **Cost** scales linearly with questions (~$0.001 each, $0 when cached) and is capped per month.
+
+Not load-tested: these figures come from per-request measurements, not a concurrent-user test.
+
 ## Known limits
 
 - One upload parses at a time; a 300-page book takes ~25 minutes on a laptop CPU (searchable as it goes).
 - One shared password, not per-user accounts: everyone who signs in sees the same library.
-- Answer cache and rate limits are per process; run one app process, or move them to Redis to scale out.
 - The table clean-up rules (section labels, OCR fixes) were developed on one IRS scan; the held-out Kestrel
   scan and ResNet tables test them, but other layouts may need new rules.
 - Embedding cost is counted at a conservative per-character estimate, not the exact bill.
@@ -181,27 +209,31 @@ question (correct / supported / retrieved), so the next run regenerates it with 
 <!-- scores:start -->
 | Metric | Baseline (retrieve → generate) | Self-correcting agent | Δ |
 |---|---|---|---|
-| faithfulness | – | 0.875 | |
-| answer_relevancy | – | 0.712 | |
-| llm_context_precision_with_reference | – | 0.754 | |
-| context_recall | – | 0.967 | |
-| correct | 0.875 | 0.833 | -0.042 |
-| faithfulness [direct] | – | 0.95 | |
-| context_recall [direct] | – | 1 | |
-| correct [direct] | 0.864 | 1 | +0.136 |
-| faithfulness [vague] | – | 0.833 | |
-| context_recall [vague] | – | 0.8 | |
-| correct [vague] | 0.75 | 0.8 | +0.05 |
-| faithfulness [messy] | – | 0.783 | |
-| context_recall [messy] | – | 1 | |
-| correct [messy] | 0.944 | 0.6 | -0.344 |
+| correct | 0.91 | 0.968 | +0.058 |
+| supported | 0.981 | 0.994 | +0.013 |
+| retrieved | 0.949 | 0.981 | +0.032 |
+| correct [direct] | 0.879 | 0.97 | +0.091 |
+| correct [vague] | 0.75 | 0.833 | +0.083 |
+| correct [messy] | 0.962 | 0.987 | +0.025 |
+| correct [csv] | 1 | 1 | +0 |
+| correct [docx] | 1 | 1 | +0 |
+| correct [html] | 1 | 1 | +0 |
+| correct [image] | 1 | 1 | +0 |
+| correct [markdown] | 1 | 1 | +0 |
+| correct [pdf] | 0.835 | 0.941 | +0.106 |
+| correct [pptx] | 1 | 1 | +0 |
+| correct [scanned pdf] | 1 | 1 | +0 |
+| correct [xlsx] | 1 | 1 | +0 |
+| correct [dev] | 0.911 | 0.962 | +0.051 |
+| correct [heldout] | 0.909 | 0.974 | +0.065 |
+| checker_agreement | – | 1 | |
+| checker_passed_unsupported | – | 0 | |
 | abstention_rate [unanswerable] | 1 | 1 | +0 |
-| rewrite_rate | 0 | 0.273 | +0.273 |
-| mean_attempts | – | 0.39 | |
-| mean_seconds | 1.133 | 4.3 | +3.167 |
-| mean_cost_usd | 0.00086 | 0.00054 | -0.00032 |
+| rewrite_rate | 0 | 0.084 | +0.084 |
+| mean_seconds | 1.1 | 3.5 | +2.4 |
+| mean_cost_usd | 0.00081 | 0.001 | +0.00019 |
 
-_33 questions from `testset.json` (direct, vague, messy scanned tables, unanswerable; `heldout` = documents never used for tuning), mean of 1 runs, graded by `gemini-2.5-flash-lite` against reference answers; unanswerable questions are scored on abstention instead._
+_167 questions from `testset.json` (direct, vague, messy scanned tables, unanswerable; `heldout` = documents never used for tuning), mean of 1 runs, graded by `gemini-2.5-flash-lite` against reference answers; unanswerable questions are scored on abstention instead._
 <!-- scores:end -->
 
 Metrics: **faithfulness** (answer claims supported by context), **answer_relevancy** (answer addresses the

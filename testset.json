@@ -2,286 +2,1255 @@
   {
     "question": "What BLEU score does the big Transformer model achieve on the WMT 2014 English-to-German translation task?",
     "ground_truth": "The big Transformer achieves 28.4 BLEU on WMT 2014 English-to-German.",
-    "type": "direct"
+    "type": "direct",
+    "format": "pdf"
   },
   {
     "question": "What BLEU score does the big Transformer achieve on WMT 2014 English-to-French?",
     "ground_truth": "41.8 BLEU on WMT 2014 English-to-French (abstract and Table 2). The paper is inconsistent: the text of section 6.1 says 41.0, so an answer giving 41.8, or giving both and noting the conflict, is correct.",
-    "type": "direct"
+    "type": "direct",
+    "format": "pdf"
   },
   {
     "question": "What is the per-layer complexity of self-attention compared to a recurrent layer?",
     "ground_truth": "Self-attention has per-layer complexity O(n^2 * d) while a recurrent layer has O(n * d^2), where n is sequence length and d is representation dimension.",
-    "type": "direct"
+    "type": "direct",
+    "format": "pdf"
   },
   {
     "question": "How many sequential operations and what maximum path length does a self-attention layer need?",
     "ground_truth": "A self-attention layer needs O(1) sequential operations and has O(1) maximum path length, versus O(n) for both in a recurrent layer.",
-    "type": "direct"
+    "type": "direct",
+    "format": "pdf"
   },
   {
     "question": "What are d_model, d_ff and the number of heads in the base Transformer?",
     "ground_truth": "The base model uses d_model = 512, d_ff = 2048 and h = 8 attention heads.",
-    "type": "direct"
+    "type": "direct",
+    "format": "pdf"
   },
   {
     "question": "What are d_model, d_ff, number of heads and dropout for the big Transformer?",
     "ground_truth": "The big model uses d_model = 1024, d_ff = 4096, h = 16 heads and dropout P_drop = 0.3.",
-    "type": "direct"
+    "type": "direct",
+    "format": "pdf"
   },
   {
     "question": "How many layers are in the encoder and decoder stacks?",
     "ground_truth": "Both the encoder and decoder are stacks of N = 6 identical layers.",
-    "type": "direct"
+    "type": "direct",
+    "format": "pdf"
   },
   {
     "question": "What hardware was used for training and how long did the base and big models train?",
     "ground_truth": "Training used one machine with 8 NVIDIA P100 GPUs. Base models trained for 100,000 steps (about 12 hours, 0.4 s per step); big models trained for 300,000 steps (3.5 days, 1.0 s per step).",
-    "type": "direct"
+    "type": "direct",
+    "format": "pdf"
   },
   {
     "question": "Which optimizer settings were used?",
     "ground_truth": "Adam with beta1 = 0.9, beta2 = 0.98 and epsilon = 1e-9, with a learning rate that increases linearly for warmup_steps = 4000 and then decreases proportionally to the inverse square root of the step number.",
-    "type": "direct"
+    "type": "direct",
+    "format": "pdf"
   },
   {
     "question": "What value of label smoothing was used?",
     "ground_truth": "Label smoothing with epsilon_ls = 0.1 was used; it hurts perplexity but improves accuracy and BLEU.",
-    "type": "direct"
+    "type": "direct",
+    "format": "pdf"
   },
   {
     "question": "How large were the training datasets and vocabularies for EN-DE and EN-FR?",
     "ground_truth": "EN-DE used WMT 2014 with about 4.5 million sentence pairs and a shared byte-pair vocabulary of about 37,000 tokens; EN-FR used 36 million sentences with a 32,000 word-piece vocabulary.",
-    "type": "direct"
+    "type": "direct",
+    "format": "pdf"
   },
   {
     "question": "What beam search settings were used at inference?",
     "ground_truth": "Beam search with beam size 4 and length penalty alpha = 0.6, with maximum output length of input length + 50.",
-    "type": "direct"
+    "type": "direct",
+    "format": "pdf"
   },
   {
     "question": "How much worse is single-head attention than the best multi-head setting?",
     "ground_truth": "Single-head attention is 0.9 BLEU worse than the best setting.",
-    "type": "direct"
+    "type": "direct",
+    "format": "pdf"
   },
   {
     "question": "What F1 score does the Transformer get on English constituency parsing when trained only on WSJ?",
     "ground_truth": "Trained only on the WSJ training set, the 4-layer Transformer reaches 91.3 F1 on WSJ section 23; in the semi-supervised setting it reaches 92.7 F1.",
-    "type": "direct"
+    "type": "direct",
+    "format": "pdf"
   },
   {
     "question": "What was the training cost in FLOPs of the big Transformer on EN-DE?",
     "ground_truth": "The big Transformer's training cost is 2.3 x 10^19 FLOPs.",
-    "type": "direct"
+    "type": "direct",
+    "format": "pdf"
   },
   {
     "type": "vague",
     "question": "how long did training the bigger version take, and on what machines?",
-    "ground_truth": "The big Transformer models trained for 300,000 steps, about 3.5 days, on one machine with 8 NVIDIA P100 GPUs."
+    "ground_truth": "The big Transformer models trained for 300,000 steps, about 3.5 days, on one machine with 8 NVIDIA P100 GPUs.",
+    "format": "pdf"
   },
   {
     "type": "vague",
     "question": "what trick lets the model know where each word sits in the sentence?",
-    "ground_truth": "Positional encodings: sine and cosine functions of different frequencies are added to the input embeddings at the bottom of the encoder and decoder stacks."
+    "ground_truth": "Positional encodings: sine and cosine functions of different frequencies are added to the input embeddings at the bottom of the encoder and decoder stacks.",
+    "format": "pdf"
   },
   {
     "type": "vague",
     "question": "why do they shrink the dot products before the softmax?",
-    "ground_truth": "Dot products are scaled by 1/sqrt(d_k) because for large d_k they grow large in magnitude, pushing the softmax into regions with extremely small gradients."
+    "ground_truth": "Dot products are scaled by 1/sqrt(d_k) because for large d_k they grow large in magnitude, pushing the softmax into regions with extremely small gradients.",
+    "format": "pdf"
   },
   {
     "type": "vague",
     "question": "what did they do to keep it from overfitting?",
-    "ground_truth": "They used residual dropout (P_drop = 0.1 for the base model) on sub-layer outputs and on the sums of embeddings and positional encodings, plus label smoothing with epsilon_ls = 0.1."
+    "ground_truth": "They used residual dropout (P_drop = 0.1 for the base model) on sub-layer outputs and on the sums of embeddings and positional encodings, plus label smoothing with epsilon_ls = 0.1.",
+    "format": "pdf"
   },
   {
     "type": "vague",
     "question": "how big was the shared word list for the German data?",
-    "ground_truth": "English-German used byte-pair encoding with a shared source-target vocabulary of about 37,000 tokens."
+    "ground_truth": "English-German used byte-pair encoding with a shared source-target vocabulary of about 37,000 tokens.",
+    "format": "pdf"
   },
   {
     "type": "messy",
     "question": "How much qualified overtime compensation can a married couple filing jointly deduct?",
-    "ground_truth": "Up to $25,000 of qualified overtime compensation if married filing jointly ($12,500 otherwise), for tax years beginning after 2024 and ending before 2029."
+    "ground_truth": "Up to $25,000 of qualified overtime compensation if married filing jointly ($12,500 otherwise), for tax years beginning after 2024 and ending before 2029.",
+    "format": "pdf"
   },
   {
     "type": "messy",
     "question": "Up to how much in qualified tips can be deducted, and do mandatory service charges count?",
-    "ground_truth": "Up to $25,000 of qualified tips received in occupations that customarily and regularly received tips on or before December 31, 2024; mandatory service charges added to the bill are not qualified tips."
+    "ground_truth": "Up to $25,000 of qualified tips received in occupations that customarily and regularly received tips on or before December 31, 2024; mandatory service charges added to the bill are not qualified tips.",
+    "format": "pdf"
   },
   {
     "type": "messy",
     "question": "Since the 2022 redesign, what is Form W-4P used for, and which form covers nonperiodic payments?",
-    "ground_truth": "Form W-4P is used only for withholding elections on periodic pension or annuity payments; nonperiodic payments and eligible rollover distributions use Form W-4R."
+    "ground_truth": "Form W-4P is used only for withholding elections on periodic pension or annuity payments; nonperiodic payments and eligible rollover distributions use Form W-4R.",
+    "format": "pdf"
   },
   {
     "type": "messy",
     "question": "Under the STANDARD withholding rate schedule for married filing jointly, what is withheld for an adjusted annual wage between $120,100 and $230,700?",
-    "ground_truth": "$11,600.00 plus 22% of the amount over $120,100."
+    "ground_truth": "$11,600.00 plus 22% of the amount over $120,100.",
+    "format": "pdf"
   },
   {
     "type": "messy",
     "question": "Under the STANDARD schedule, what is withheld for a single filer with an adjusted annual wage of $648,100 or more?",
-    "ground_truth": "$192,979.25 plus 37% of the amount over $648,100."
+    "ground_truth": "$192,979.25 plus 37% of the amount over $648,100.",
+    "format": "pdf"
   },
   {
     "type": "messy",
     "question": "In the Form W-4 Step 2 checkbox schedule for head of household, at what adjusted annual wage does the 10% rate start?",
-    "ground_truth": "At $12,075; the 10% rate applies from $12,075 up to $20,925."
+    "ground_truth": "At $12,075; the 10% rate applies from $12,075 up to $20,925.",
+    "format": "pdf"
   },
   {
     "type": "messy",
     "question": "Under the STANDARD schedule for single filers, below what adjusted annual wage is nothing withheld?",
-    "ground_truth": "Below $7,500 (the 0% bracket runs from $0 up to $7,500)."
+    "ground_truth": "Below $7,500 (the 0% bracket runs from $0 up to $7,500).",
+    "format": "pdf"
   },
   {
     "type": "messy",
     "question": "On the 2026 weekly wage bracket table, what is the standard withholding for married filing jointly at an adjusted wage of $700?",
-    "ground_truth": "$8 (row: at least $695 but less than $705; the Form W-4 Step 2 checkbox amount is $42)."
+    "ground_truth": "$8 (row: at least $695 but less than $705; the Form W-4 Step 2 checkbox amount is $42).",
+    "format": "pdf"
   },
   {
     "type": "messy",
     "question": "On the 2026 weekly wage bracket table, what is the Form W-4 Step 2 checkbox withholding for a single filer earning $500?",
-    "ground_truth": "$39 (row: at least $495 but less than $505)."
+    "ground_truth": "$39 (row: at least $495 but less than $505).",
+    "format": "pdf"
   },
   {
     "type": "messy",
     "question": "On the 2026 weekly wage bracket table, what is the standard withholding for head of household at an adjusted wage of $760?",
-    "ground_truth": "$30 (row: at least $755 but less than $765)."
+    "ground_truth": "$30 (row: at least $755 but less than $765).",
+    "format": "pdf"
   },
   {
     "type": "unanswerable",
     "question": "What batch size was used to fine-tune BERT?",
-    "ground_truth": "The documents do not contain this information."
+    "ground_truth": "The documents do not contain this information.",
+    "format": "pdf"
   },
   {
     "type": "unanswerable",
     "question": "What is the 2026 Social Security wage base limit?",
-    "ground_truth": "The documents do not contain this information."
+    "ground_truth": "The documents do not contain this information.",
+    "format": "pdf"
   },
   {
     "type": "unanswerable",
     "question": "How many GPUs were used to train GPT-3?",
-    "ground_truth": "The documents do not contain this information."
+    "ground_truth": "The documents do not contain this information.",
+    "format": "pdf"
   },
   {
     "question": "What top-5 error did the ResNet ensemble get on the ImageNet test set, and what did it win?",
     "ground_truth": "3.57% top-5 error; it won 1st place in the ILSVRC 2015 classification task.",
     "type": "direct",
-    "split": "heldout"
+    "split": "heldout",
+    "format": "pdf"
   },
   {
     "question": "What optimizer settings were used to train the ImageNet ResNets?",
     "ground_truth": "SGD with mini-batch 256, learning rate starting at 0.1 divided by 10 when error plateaus, up to 60x10^4 iterations, weight decay 0.0001, momentum 0.9, no dropout.",
     "type": "direct",
-    "split": "heldout"
+    "split": "heldout",
+    "format": "pdf"
   },
   {
     "question": "How many FLOPs does the 152-layer ResNet have compared with VGG-16/19?",
     "ground_truth": "11.3 billion FLOPs, lower than VGG-16/19 (15.3/19.6 billion).",
     "type": "direct",
-    "split": "heldout"
+    "split": "heldout",
+    "format": "pdf"
   },
   {
     "question": "How large an improvement did deep residual nets give on COCO object detection?",
     "ground_truth": "A 6.0% increase in mAP@[.5, .95], a 28% relative improvement.",
     "type": "direct",
-    "split": "heldout"
+    "split": "heldout",
+    "format": "pdf"
   },
   {
     "question": "In the single-model ImageNet validation results, what are the top-1 and top-5 errors of ResNet-152?",
     "ground_truth": "19.38% top-1 and 4.49% top-5.",
     "type": "messy",
-    "split": "heldout"
+    "split": "heldout",
+    "format": "pdf"
   },
   {
     "question": "What top-1 error do the plain 34-layer net and the 34-layer ResNet get in 10-crop testing?",
     "ground_truth": "Plain-34: 28.54%; ResNet-34: 25.03%.",
     "type": "messy",
-    "split": "heldout"
+    "split": "heldout",
+    "format": "pdf"
   },
   {
     "question": "On CIFAR-10, how many parameters and what error does the 1202-layer ResNet have?",
     "ground_truth": "19.4M parameters and 7.93% error.",
     "type": "messy",
-    "split": "heldout"
+    "split": "heldout",
+    "format": "pdf"
   },
   {
     "question": "why didn't they just keep stacking plain layers deeper?",
     "ground_truth": "Deeper plain nets suffer a degradation problem: e.g. the 34-layer plain net has higher training/validation error than the 18-layer one; residual learning fixes this.",
     "type": "vague",
-    "split": "heldout"
+    "split": "heldout",
+    "format": "pdf"
   },
   {
     "question": "how were the small CIFAR models trained?",
     "ground_truth": "Mini-batch 128 on two GPUs, learning rate 0.1 divided by 10 at 32k and 48k iterations, stopped at 64k, weight decay 0.0001, momentum 0.9, no dropout.",
     "type": "vague",
-    "split": "heldout"
+    "split": "heldout",
+    "format": "pdf"
   },
   {
     "question": "How many images does CIFAR-10 have for training and testing?",
     "ground_truth": "50k training and 10k test images, 10 classes.",
     "type": "direct",
-    "split": "heldout"
+    "split": "heldout",
+    "format": "pdf"
   },
   {
     "question": "What was Kestrel's total revenue in 2025 and how much did it grow?",
     "ground_truth": "$412.6M, up 18.0% from $349.7M.",
     "type": "direct",
-    "split": "heldout"
+    "split": "heldout",
+    "format": "pdf"
   },
   {
     "question": "What is the list price and payload of the Atlas X2?",
     "ground_truth": "$37,400, payload 90 kg.",
     "type": "messy",
-    "split": "heldout"
+    "split": "heldout",
+    "format": "pdf"
   },
   {
     "question": "What discount applies to an order of 60 robots?",
     "ground_truth": "10% (orders of 50-99 units).",
     "type": "messy",
-    "split": "heldout"
+    "split": "heldout",
+    "format": "pdf"
   },
   {
     "question": "For a P2 incident, how fast is the first response and target resolution?",
     "ground_truth": "4 hours first response, 2 business days target resolution, 24/7 coverage.",
     "type": "messy",
-    "split": "heldout"
+    "split": "heldout",
+    "format": "pdf"
   },
   {
     "question": "How many warranty claims did the Sparrow family have and what was the main cause?",
     "ground_truth": "58 claims; main cause wheel hub seal.",
     "type": "messy",
-    "split": "heldout"
+    "split": "heldout",
+    "format": "pdf"
   },
   {
     "question": "How many units were shipped in total according to the warranty appendix?",
     "ground_truth": "8,247 units (205 claims).",
     "type": "messy",
-    "split": "heldout"
+    "split": "heldout",
+    "format": "pdf"
   },
   {
     "question": "What is the parental leave policy and how many remote days are allowed?",
     "ground_truth": "26 weeks full pay for the primary caregiver, 8 weeks for the secondary; up to 2 remote days per week.",
     "type": "direct",
-    "split": "heldout"
+    "split": "heldout",
+    "format": "pdf"
   },
   {
     "question": "who runs the money side of the business?",
     "ground_truth": "Daniel Reyes, Chief Financial Officer.",
     "type": "vague",
-    "split": "heldout"
+    "split": "heldout",
+    "format": "pdf"
   },
   {
     "question": "What is Kestrel's share price?",
     "ground_truth": "",
     "type": "unanswerable",
-    "split": "heldout"
+    "split": "heldout",
+    "format": "pdf"
   },
   {
     "question": "What image resolution did the Vision Transformer (ViT) use for pre-training?",
     "ground_truth": "",
     "type": "unanswerable",
-    "split": "heldout"
+    "split": "heldout",
+    "format": "pdf"
+  },
+  {
+    "file": "sp500_constituents.csv",
+    "type": "messy",
+    "split": "dev",
+    "question": "In the S&P 500 constituents list, what GICS sector is F5, Inc. (FFIV) in, and where is it headquartered?",
+    "ground_truth": "Information Technology; headquartered in Seattle, Washington.",
+    "format": "csv"
+  },
+  {
+    "file": "sp500_constituents.csv",
+    "type": "messy",
+    "split": "dev",
+    "question": "In the S&P 500 constituents list, what GICS sector is Fox Corporation (Class B) (FOX) in, and where is it headquartered?",
+    "ground_truth": "Communication Services; headquartered in New York City, New York.",
+    "format": "csv"
+  },
+  {
+    "file": "sp500_constituents.csv",
+    "type": "messy",
+    "split": "dev",
+    "question": "In the S&P 500 constituents list, what GICS sector is Solventum (SOLV) in, and where is it headquartered?",
+    "ground_truth": "Health Care; headquartered in Saint Paul, Minnesota.",
+    "format": "csv"
+  },
+  {
+    "file": "sp500_constituents.csv",
+    "type": "messy",
+    "split": "dev",
+    "question": "In the S&P 500 constituents list, what GICS sector is Procter & Gamble (PG) in, and where is it headquartered?",
+    "ground_truth": "Consumer Staples; headquartered in Cincinnati, Ohio.",
+    "format": "csv"
+  },
+  {
+    "file": "sp500_constituents.csv",
+    "type": "messy",
+    "split": "dev",
+    "question": "In the S&P 500 constituents list, what GICS sector is Devon Energy (DVN) in, and where is it headquartered?",
+    "ground_truth": "Energy; headquartered in Oklahoma City, Oklahoma.",
+    "format": "csv"
+  },
+  {
+    "file": "sp500_constituents.csv",
+    "type": "messy",
+    "split": "dev",
+    "question": "In the S&P 500 constituents list, what GICS sector is Intel (INTC) in, and where is it headquartered?",
+    "ground_truth": "Information Technology; headquartered in Santa Clara, California.",
+    "format": "csv"
+  },
+  {
+    "file": "sp500_constituents.csv",
+    "type": "direct",
+    "split": "dev",
+    "question": "Which company has the ticker symbol TDG in the S&P 500 constituents list?",
+    "ground_truth": "TransDigm Group.",
+    "format": "csv"
+  },
+  {
+    "file": "sp500_constituents.csv",
+    "type": "direct",
+    "split": "dev",
+    "question": "Which company has the ticker symbol LITE in the S&P 500 constituents list?",
+    "ground_truth": "Lumentum.",
+    "format": "csv"
+  },
+  {
+    "file": "sp500_constituents.csv",
+    "type": "direct",
+    "split": "dev",
+    "question": "Which company has the ticker symbol JNJ in the S&P 500 constituents list?",
+    "ground_truth": "Johnson & Johnson.",
+    "format": "csv"
+  },
+  {
+    "file": "sp500_constituents.csv",
+    "type": "direct",
+    "split": "dev",
+    "question": "Which company has the ticker symbol EXE in the S&P 500 constituents list?",
+    "ground_truth": "Expand Energy.",
+    "format": "csv"
+  },
+  {
+    "file": "world_gdp_2015_2022.xlsx",
+    "type": "messy",
+    "split": "heldout",
+    "question": "In the GDP spreadsheet, what was Canada's GDP in 2022 (current US dollars)?",
+    "ground_truth": "2,161,483,369,422 US dollars.",
+    "format": "xlsx"
+  },
+  {
+    "file": "world_gdp_2015_2022.xlsx",
+    "type": "messy",
+    "split": "heldout",
+    "question": "In the GDP spreadsheet, what was Germany's GDP in 2022 (current US dollars)?",
+    "ground_truth": "4,082,469,490,798 US dollars.",
+    "format": "xlsx"
+  },
+  {
+    "file": "world_gdp_2015_2022.xlsx",
+    "type": "messy",
+    "split": "heldout",
+    "question": "In the GDP spreadsheet, what was Turkiye's GDP in 2022 (current US dollars)?",
+    "ground_truth": "907,118,435,953 US dollars.",
+    "format": "xlsx"
+  },
+  {
+    "file": "world_gdp_2015_2022.xlsx",
+    "type": "messy",
+    "split": "heldout",
+    "question": "In the GDP spreadsheet, what was United States's GDP in 2018 (current US dollars)?",
+    "ground_truth": "20,656,516,000,000 US dollars.",
+    "format": "xlsx"
+  },
+  {
+    "file": "world_gdp_2015_2022.xlsx",
+    "type": "messy",
+    "split": "heldout",
+    "question": "In the GDP spreadsheet, what was Netherlands's GDP in 2017 (current US dollars)?",
+    "ground_truth": "833,869,641,687 US dollars.",
+    "format": "xlsx"
+  },
+  {
+    "file": "world_gdp_2015_2022.xlsx",
+    "type": "messy",
+    "split": "heldout",
+    "question": "In the GDP spreadsheet, what was Brazil's GDP in 2022 (current US dollars)?",
+    "ground_truth": "1,951,923,942,083 US dollars.",
+    "format": "xlsx"
+  },
+  {
+    "file": "world_gdp_2015_2022.xlsx",
+    "type": "messy",
+    "split": "heldout",
+    "question": "In the GDP spreadsheet, what was Mexico's GDP in 2017 (current US dollars)?",
+    "ground_truth": "1,190,721,475,906 US dollars.",
+    "format": "xlsx"
+  },
+  {
+    "file": "world_gdp_2015_2022.xlsx",
+    "type": "messy",
+    "split": "heldout",
+    "question": "In the GDP spreadsheet, what was Korea, Rep.'s GDP in 2016 (current US dollars)?",
+    "ground_truth": "1,499,679,823,910 US dollars.",
+    "format": "xlsx"
+  },
+  {
+    "file": "world_gdp_2015_2022.xlsx",
+    "type": "messy",
+    "split": "heldout",
+    "question": "In the GDP spreadsheet, what was Poland's GDP in 2022 (current US dollars)?",
+    "ground_truth": "689,763,329,458 US dollars.",
+    "format": "xlsx"
+  },
+  {
+    "file": "world_gdp_2015_2022.xlsx",
+    "type": "messy",
+    "split": "heldout",
+    "question": "In the GDP spreadsheet, what was United Kingdom's GDP in 2019 (current US dollars)?",
+    "ground_truth": "2,851,407,164,908 US dollars.",
+    "format": "xlsx"
+  },
+  {
+    "file": "us_constitution.docx",
+    "type": "direct",
+    "split": "dev",
+    "question": "According to the Constitution, how old must a Representative be?",
+    "ground_truth": "Twenty five years.",
+    "format": "docx"
+  },
+  {
+    "file": "us_constitution.docx",
+    "type": "direct",
+    "split": "dev",
+    "question": "How old must a Senator be, and for how many years must they have been a citizen?",
+    "ground_truth": "Thirty years old and nine years a citizen of the United States.",
+    "format": "docx"
+  },
+  {
+    "file": "us_constitution.docx",
+    "type": "direct",
+    "split": "dev",
+    "question": "How many Senators does each State have, and how long is their term?",
+    "ground_truth": "Two Senators from each State, for six years.",
+    "format": "docx"
+  },
+  {
+    "file": "us_constitution.docx",
+    "type": "direct",
+    "split": "dev",
+    "question": "What is the minimum age to be eligible for President?",
+    "ground_truth": "Thirty five years.",
+    "format": "docx"
+  },
+  {
+    "file": "us_constitution.docx",
+    "type": "direct",
+    "split": "dev",
+    "question": "How many States had to ratify the Constitution for it to be established?",
+    "ground_truth": "The ratification of the Conventions of nine States.",
+    "format": "docx"
+  },
+  {
+    "file": "us_constitution.docx",
+    "type": "direct",
+    "split": "dev",
+    "question": "What does the Preamble say the Constitution is ordained to do first?",
+    "ground_truth": "To form a more perfect Union.",
+    "format": "docx"
+  },
+  {
+    "file": "apollo11_mission.pptx",
+    "type": "direct",
+    "split": "heldout",
+    "question": "Who were the three Apollo 11 astronauts and their roles?",
+    "ground_truth": "Neil Armstrong (commander), Buzz Aldrin (lunar module pilot), Michael Collins (command module pilot).",
+    "format": "pptx"
+  },
+  {
+    "file": "apollo11_mission.pptx",
+    "type": "direct",
+    "split": "heldout",
+    "question": "When and from where did Apollo 11 launch?",
+    "ground_truth": "July 16, 1969, from Kennedy Space Center.",
+    "format": "pptx"
+  },
+  {
+    "file": "apollo11_mission.pptx",
+    "type": "direct",
+    "split": "heldout",
+    "question": "What were the names of the command module and lunar module?",
+    "ground_truth": "Columbia and Eagle.",
+    "format": "pptx"
+  },
+  {
+    "file": "apollo11_mission.pptx",
+    "type": "direct",
+    "split": "heldout",
+    "question": "Where did the lunar module land and on what date?",
+    "ground_truth": "The Sea of Tranquility, July 20, 1969.",
+    "format": "pptx"
+  },
+  {
+    "file": "apollo11_mission.pptx",
+    "type": "direct",
+    "split": "heldout",
+    "question": "How did the mission end?",
+    "ground_truth": "Splashdown in the Pacific Ocean on July 24, 1969; recovered by USS Hornet.",
+    "format": "pptx"
+  },
+  {
+    "file": "apollo11_mission.pptx",
+    "type": "direct",
+    "split": "heldout",
+    "question": "What rocket launched Apollo 11?",
+    "ground_truth": "Saturn V.",
+    "format": "pptx"
+  },
+  {
+    "file": "tallest_buildings.png",
+    "type": "messy",
+    "split": "heldout",
+    "question": "In the tallest buildings image, how tall is Ping An Finance Centre and in which city is it?",
+    "ground_truth": "599.1 m; Shenzhen.",
+    "format": "image"
+  },
+  {
+    "file": "tallest_buildings.png",
+    "type": "messy",
+    "split": "heldout",
+    "question": "In the tallest buildings image, how tall is Merdeka Maybank Tower and in which city is it?",
+    "ground_truth": "678.9 m; Kuala Lumpur.",
+    "format": "image"
+  },
+  {
+    "file": "tallest_buildings.png",
+    "type": "messy",
+    "split": "heldout",
+    "question": "In the tallest buildings image, how tall is Lotte World Tower and in which city is it?",
+    "ground_truth": "554.5 m; Seoul.",
+    "format": "image"
+  },
+  {
+    "file": "tallest_buildings.png",
+    "type": "messy",
+    "split": "heldout",
+    "question": "In the tallest buildings image, how tall is Burj Khalifa and in which city is it?",
+    "ground_truth": "828.0 m; Dubai.",
+    "format": "image"
+  },
+  {
+    "file": "tallest_buildings.png",
+    "type": "messy",
+    "split": "heldout",
+    "question": "In the tallest buildings image, how tall is Guangzhou CTF Finance Centre and in which city is it?",
+    "ground_truth": "530.0 m; Guangzhou.",
+    "format": "image"
+  },
+  {
+    "file": "tallest_buildings.png",
+    "type": "messy",
+    "split": "heldout",
+    "question": "In the tallest buildings image, how tall is Shanghai Tower and in which city is it?",
+    "ground_truth": "632.0 m; Shanghai.",
+    "format": "image"
+  },
+  {
+    "file": "tallest_buildings.png",
+    "type": "messy",
+    "split": "heldout",
+    "question": "In the tallest buildings image, how many floors does Tianjin CTF Finance Centre have and when was it completed?",
+    "ground_truth": "97 floors; completed in 2019.",
+    "format": "image"
+  },
+  {
+    "file": "tallest_buildings.png",
+    "type": "messy",
+    "split": "heldout",
+    "question": "In the tallest buildings image, how many floors does Merdeka Maybank Tower have and when was it completed?",
+    "ground_truth": "118 floors; completed in 2024.",
+    "format": "image"
+  },
+  {
+    "file": "tallest_buildings.png",
+    "type": "messy",
+    "split": "heldout",
+    "question": "In the tallest buildings image, how many floors does Guangzhou CTF Finance Centre have and when was it completed?",
+    "ground_truth": "111 floors; completed in 2016.",
+    "format": "image"
+  },
+  {
+    "file": "tallest_buildings.png",
+    "type": "messy",
+    "split": "heldout",
+    "question": "In the tallest buildings image, how many floors does Burj Khalifa have and when was it completed?",
+    "ground_truth": "163 floors; completed in 2010.",
+    "format": "image"
+  },
+  {
+    "file": "declaration_scan.pdf",
+    "type": "messy",
+    "split": "dev",
+    "question": "On what date was the Declaration adopted in Congress, according to the scan?",
+    "ground_truth": "July 4, 1776.",
+    "format": "scanned pdf"
+  },
+  {
+    "file": "declaration_scan.pdf",
+    "type": "messy",
+    "split": "dev",
+    "question": "How many united States of America does the Declaration's title refer to?",
+    "ground_truth": "Thirteen.",
+    "format": "scanned pdf"
+  },
+  {
+    "file": "declaration_scan.pdf",
+    "type": "messy",
+    "split": "dev",
+    "question": "According to the Declaration, what unalienable Rights are named?",
+    "ground_truth": "Life, Liberty and the pursuit of Happiness.",
+    "format": "scanned pdf"
+  },
+  {
+    "file": "declaration_scan.pdf",
+    "type": "messy",
+    "split": "dev",
+    "question": "From what do governments derive their just powers, per the Declaration?",
+    "ground_truth": "From the consent of the governed.",
+    "format": "scanned pdf"
+  },
+  {
+    "file": "declaration_scan.pdf",
+    "type": "messy",
+    "split": "dev",
+    "question": "Who is described as having a history of repeated injuries and usurpations?",
+    "ground_truth": "The present King of Great Britain.",
+    "format": "scanned pdf"
+  },
+  {
+    "file": "invoice_INV-2025-0417.pdf",
+    "type": "messy",
+    "split": "dev",
+    "question": "What is the invoice number and when is payment due?",
+    "ground_truth": "INV-2025-0417; due 13 April 2025 (Net 30).",
+    "format": "pdf"
+  },
+  {
+    "file": "invoice_INV-2025-0417.pdf",
+    "type": "messy",
+    "split": "dev",
+    "question": "What is the total due on the invoice?",
+    "ground_truth": "$4,418.00.",
+    "format": "pdf"
+  },
+  {
+    "file": "invoice_INV-2025-0417.pdf",
+    "type": "messy",
+    "split": "dev",
+    "question": "What is the subtotal before tax and the tax amount?",
+    "ground_truth": "$4,081.29 subtotal; $336.71 tax (8.25%).",
+    "format": "pdf"
+  },
+  {
+    "file": "invoice_INV-2025-0417.pdf",
+    "type": "messy",
+    "split": "dev",
+    "question": "How many pallet jacks were ordered and at what unit price?",
+    "ground_truth": "2 at $412.00 each.",
+    "format": "pdf"
+  },
+  {
+    "file": "invoice_INV-2025-0417.pdf",
+    "type": "messy",
+    "split": "dev",
+    "question": "What is the line total for the LED high-bay lights?",
+    "ground_truth": "$1,027.20 (16 x $64.20).",
+    "format": "pdf"
+  },
+  {
+    "file": "invoice_INV-2025-0417.pdf",
+    "type": "messy",
+    "split": "dev",
+    "question": "Who is the invoice billed to?",
+    "ground_truth": "Harbor Logistics Co., 88 Quay Street, Portland, OR.",
+    "format": "pdf"
+  },
+  {
+    "file": "invoice_INV-2025-0417.pdf",
+    "type": "messy",
+    "split": "dev",
+    "question": "What is the late payment penalty?",
+    "ground_truth": "1.5% interest per month.",
+    "format": "pdf"
+  },
+  {
+    "file": "adam.pdf",
+    "split": "dev",
+    "type": "messy",
+    "question": "What does the name Adam stand for?",
+    "ground_truth": "adaptive moment estimation",
+    "format": "pdf"
+  },
+  {
+    "file": "adam.pdf",
+    "split": "dev",
+    "type": "direct",
+    "question": "What is the formula for updating the exponential moving average vt at timestep t?",
+    "ground_truth": "v_t = beta2 * v_(t-1) + (1 - beta2) * g_t^2 (exponential moving average of squared gradients).",
+    "format": "pdf"
+  },
+  {
+    "file": "adam.pdf",
+    "split": "dev",
+    "type": "messy",
+    "question": "What is the minibatch size used in the multi-layer neural network experiment?",
+    "ground_truth": "128",
+    "format": "pdf"
+  },
+  {
+    "file": "adam.pdf",
+    "split": "dev",
+    "type": "direct",
+    "question": "How does Adam compare to Adagrad in terms of convergence speed?",
+    "ground_truth": "Adam converges as fast as Adagrad.",
+    "format": "pdf"
+  },
+  {
+    "file": "adam.pdf",
+    "split": "dev",
+    "type": "direct",
+    "question": "What is the bound on the magnitude of parameter updates with AdaMax?",
+    "ground_truth": "|∆t| ≤ α",
+    "format": "pdf"
+  },
+  {
+    "file": "fw4.pdf",
+    "split": "dev",
+    "type": "direct",
+    "question": "What is the phone number to contact the SSA if your name on your social security card does not match your name on Form W-4?",
+    "ground_truth": "800-772-1213",
+    "format": "pdf"
+  },
+  {
+    "file": "fw4.pdf",
+    "split": "dev",
+    "type": "messy",
+    "question": "What is the deadline to submit a new Form W-4 if you claim exemption from withholding?",
+    "ground_truth": "February 16, 2027",
+    "format": "pdf"
+  },
+  {
+    "file": "fw4.pdf",
+    "split": "dev",
+    "type": "direct",
+    "question": "What are the conditions to claim exemption from withholding for 2026?",
+    "ground_truth": "You had no federal income tax liability in 2025 and expect to have no federal income tax liability in 2026.",
+    "format": "pdf"
+  },
+  {
+    "file": "fw4.pdf",
+    "split": "dev",
+    "type": "vague",
+    "question": "If you have two jobs, what should you do to make sure your withholding is accurate?",
+    "ground_truth": "Complete Step 2: use the IRS estimator, or the Multiple Jobs Worksheet (result in Step 4(c)), or with only two jobs total check the Step 2(c) box on both Forms W-4; update the forms for all jobs.",
+    "format": "pdf",
+    "label_fix": "label quoted one worksheet sentence instead of the Step 2 instructions"
+  },
+  {
+    "file": "eiffel.html",
+    "split": "dev",
+    "type": "direct",
+    "question": "What is the architectural height of the Eiffel Tower?",
+    "ground_truth": "300 m (984 ft)",
+    "format": "html"
+  },
+  {
+    "file": "eiffel.html",
+    "split": "dev",
+    "type": "direct",
+    "question": "Who won the stair-climbing championship at the Eiffel Tower in 1905?",
+    "ground_truth": "Eugène Forestier",
+    "format": "html"
+  },
+  {
+    "file": "eiffel.html",
+    "split": "dev",
+    "type": "direct",
+    "question": "When did analogue television signals from the Eiffel Tower cease?",
+    "ground_truth": "8 March 2011",
+    "format": "html"
+  },
+  {
+    "file": "eiffel.html",
+    "split": "dev",
+    "type": "messy",
+    "question": "What was the height of the Eiffel Tower in meters after the work carried out in 2000?",
+    "ground_truth": "324 m",
+    "format": "html"
+  },
+  {
+    "file": "fastapi_readme.md",
+    "split": "dev",
+    "type": "vague",
+    "question": "What are the key features of FastAPI?",
+    "ground_truth": "Fast, Fast to code, Fewer bugs, Intuitive, Easy, Short, Robust, Standards-based.",
+    "format": "markdown"
+  },
+  {
+    "file": "fastapi_readme.md",
+    "split": "dev",
+    "type": "messy",
+    "question": "What is the estimated reduction in human-induced errors when using FastAPI?",
+    "ground_truth": "about 40%",
+    "format": "markdown"
+  },
+  {
+    "file": "fastapi_readme.md",
+    "split": "dev",
+    "type": "direct",
+    "question": "What is the default URL for the API docs provided by Swagger UI?",
+    "ground_truth": "http://127.0.0.1:8000/docs",
+    "format": "markdown"
+  },
+  {
+    "file": "fastapi_readme.md",
+    "split": "dev",
+    "type": "messy",
+    "question": "How do you start the FastAPI server in development mode?",
+    "ground_truth": "uv run fastapi dev",
+    "format": "markdown"
+  },
+  {
+    "file": "fastapi_readme.md",
+    "split": "dev",
+    "type": "direct",
+    "question": "What are the two alternative user interfaces for automatic interactive API documentation?",
+    "ground_truth": "Swagger UI and ReDoc.",
+    "format": "markdown"
+  },
+  {
+    "file": "fastapi_readme.md",
+    "split": "dev",
+    "type": "messy",
+    "question": "What kind of data types can FastAPI convert from Python to network data like JSON?",
+    "ground_truth": "str, int, float, bool, list, datetime objects, UUID objects, Database models, and more.",
+    "format": "markdown"
+  },
+  {
+    "file": "fastapi_readme.md",
+    "split": "dev",
+    "type": "direct",
+    "question": "What are the main dependencies of FastAPI?",
+    "ground_truth": "FastAPI depends on Pydantic and Starlette.",
+    "format": "markdown"
+  },
+  {
+    "file": "fastapi_readme.md",
+    "split": "dev",
+    "type": "messy",
+    "question": "What is the license for this project?",
+    "ground_truth": "MIT license",
+    "format": "markdown"
+  },
+  {
+    "file": "batchnorm.pdf",
+    "split": "heldout",
+    "type": "direct",
+    "question": "What phenomenon slows down the training of deep neural networks?",
+    "ground_truth": "Internal covariate shift.",
+    "format": "pdf"
+  },
+  {
+    "file": "batchnorm.pdf",
+    "split": "heldout",
+    "type": "messy",
+    "question": "How much fewer training steps did Batch Normalization achieve for a state-of-the-art image classification model to reach the same accuracy?",
+    "ground_truth": "14 times fewer",
+    "format": "pdf"
+  },
+  {
+    "file": "batchnorm.pdf",
+    "split": "heldout",
+    "type": "direct",
+    "question": "What accuracy did Inception reach after 31 million training steps?",
+    "ground_truth": "72.2%",
+    "format": "pdf"
+  },
+  {
+    "file": "batchnorm.pdf",
+    "split": "heldout",
+    "type": "direct",
+    "question": "What is the output size for the first convolutional layer?",
+    "ground_truth": "112×112×64",
+    "format": "pdf"
+  },
+  {
+    "file": "batchnorm.pdf",
+    "split": "heldout",
+    "type": "messy",
+    "question": "How much does the computational cost increase when 5x5 convolutional layers are replaced by two consecutive 3x3 convolutional layers?",
+    "ground_truth": "about 30%",
+    "format": "pdf"
+  },
+  {
+    "file": "layernorm.pdf",
+    "split": "heldout",
+    "type": "direct",
+    "question": "What is the formula for the normalized summed inputs to a neuron in layer normalization?",
+    "ground_truth": "hi = f(gi / σi * (ai - µi) + bi)",
+    "format": "pdf"
+  },
+  {
+    "file": "layernorm.pdf",
+    "split": "heldout",
+    "type": "messy",
+    "question": "Which normalization method is invariant to re-scaling of the entire weight matrix?",
+    "ground_truth": "Batch norm, weight norm and layer norm are all invariant to weight matrix re-scaling (Table 1).",
+    "format": "pdf",
+    "label_fix": "label said only layer norm; Table 1 marks all three invariant"
+  },
+  {
+    "file": "layernorm.pdf",
+    "split": "heldout",
+    "type": "messy",
+    "question": "How much faster does layer normalization converge compared to the baseline model?",
+    "ground_truth": "60% of the time",
+    "format": "pdf"
+  },
+  {
+    "file": "layernorm.pdf",
+    "split": "heldout",
+    "type": "direct",
+    "question": "How many handwriting line sequences are there in total in the IAM-OnDB dataset?",
+    "ground_truth": "12179",
+    "format": "pdf"
+  },
+  {
+    "file": "layernorm.pdf",
+    "split": "heldout",
+    "type": "messy",
+    "question": "What's the approximate total number of weights in the model described?",
+    "ground_truth": "3.7M",
+    "format": "pdf"
+  },
+  {
+    "file": "layernorm.pdf",
+    "split": "heldout",
+    "type": "direct",
+    "question": "What are the initial values for the additive and multiplicative parameters in Layer Normalization?",
+    "ground_truth": "Each αi is initialized to a vector of zeros and each βi is initialized to a vector of ones.",
+    "format": "pdf"
+  },
+  {
+    "file": "nist_csf2.pdf",
+    "split": "heldout",
+    "type": "direct",
+    "question": "What is the NIST Cybersecurity Framework (CSF) 2.0?",
+    "ground_truth": "The NIST Cybersecurity Framework (CSF) 2.0 provides guidance to industry, government agencies, and other organizations to manage cybersecurity risks.",
+    "format": "pdf"
+  },
+  {
+    "file": "nist_csf2.pdf",
+    "split": "heldout",
+    "type": "messy",
+    "question": "What was the Cybersecurity Framework called before version 2.0?",
+    "ground_truth": "Framework for Improving Critical Infrastructure Cybersecurity",
+    "format": "pdf"
+  },
+  {
+    "file": "nist_csf2.pdf",
+    "split": "heldout",
+    "type": "direct",
+    "question": "What does the DETECT Function enable?",
+    "ground_truth": "The timely discovery and analysis of anomalies, indicators of compromise, and other potentially adverse events that may indicate that cybersecurity attacks and incidents are occurring.",
+    "format": "pdf"
+  },
+  {
+    "file": "nist_csf2.pdf",
+    "split": "heldout",
+    "type": "messy",
+    "question": "When should actions supporting RESPOND and RECOVER happen?",
+    "ground_truth": "They should be ready at all times and happen when cybersecurity incidents occur.",
+    "format": "pdf"
+  },
+  {
+    "file": "nist_csf2.pdf",
+    "split": "heldout",
+    "type": "direct",
+    "question": "What NIST Interagency Report focuses on identifying and estimating cybersecurity risk for Enterprise Risk Management?",
+    "ground_truth": "IR 8286A",
+    "format": "pdf"
+  },
+  {
+    "file": "nist_csf2.pdf",
+    "split": "heldout",
+    "type": "vague",
+    "question": "What kind of risk can be integrated with cybersecurity risk management at a high level?",
+    "ground_truth": "ICT risk (e.g. privacy, supply chain, AI) and all other risk management efforts, e.g. through ERM.",
+    "format": "pdf",
+    "label_fix": "label omitted 'ICT', which the sentence names"
+  },
+  {
+    "file": "nist_csf2.pdf",
+    "split": "heldout",
+    "type": "direct",
+    "question": "What is the ID for the control that requires inventories of software, services, and systems managed by the organization?",
+    "ground_truth": "ID.AM-02",
+    "format": "pdf"
+  },
+  {
+    "file": "nist_csf2.pdf",
+    "split": "heldout",
+    "type": "messy",
+    "question": "How are assets prioritized according to the document?",
+    "ground_truth": "based on classification, criticality, resources, and impact on the mission",
+    "format": "pdf"
+  },
+  {
+    "file": "nist_csf2.pdf",
+    "split": "heldout",
+    "type": "direct",
+    "question": "What are the six CSF Functions?",
+    "ground_truth": "Govern, Identify, Protect, Detect, Respond, and Recover.",
+    "format": "pdf"
+  },
+  {
+    "file": "nist_csf2.pdf",
+    "split": "heldout",
+    "type": "messy",
+    "question": "How many Tiers are there for characterizing cybersecurity risk governance and management practices?",
+    "ground_truth": "four",
+    "format": "pdf"
+  },
+  {
+    "file": "fomc.html",
+    "split": "heldout",
+    "type": "direct",
+    "question": "What is the Committee's objective for inflation over the longer run?",
+    "ground_truth": "2 percent",
+    "format": "html"
+  },
+  {
+    "file": "fomc.html",
+    "split": "heldout",
+    "type": "messy",
+    "question": "By how much did the Committee lower the target range for the federal funds rate?",
+    "ground_truth": "1/2 percentage point",
+    "format": "html"
+  },
+  {
+    "file": "fomc.html",
+    "split": "heldout",
+    "type": "direct",
+    "question": "Who voted against the monetary policy action?",
+    "ground_truth": "Michelle W. Bowman",
+    "format": "html"
+  },
+  {
+    "file": "fomc.html",
+    "split": "heldout",
+    "type": "messy",
+    "question": "What was the preferred action of the person who voted against the policy?",
+    "ground_truth": "lower the target range for the federal funds rate by 1/4 percentage point",
+    "format": "html"
+  },
+  {
+    "file": "mars.html",
+    "split": "heldout",
+    "type": "direct",
+    "question": "What is the equatorial radius of Mars in kilometers?",
+    "ground_truth": "3396.2",
+    "format": "html"
+  },
+  {
+    "file": "mars.html",
+    "split": "heldout",
+    "type": "vague",
+    "question": "Roughly how much does Mars weigh compared to Earth?",
+    "ground_truth": "about a tenth",
+    "format": "html"
+  },
+  {
+    "file": "mars.html",
+    "split": "heldout",
+    "type": "direct",
+    "question": "What is the semimajor axis of Mars' orbit in AU?",
+    "ground_truth": "1.52366231",
+    "format": "html"
+  },
+  {
+    "file": "mars.html",
+    "split": "heldout",
+    "type": "messy",
+    "question": "Roughly how much does the surface pressure of Mars' atmosphere vary?",
+    "ground_truth": "4.0 to 8.7 mb",
+    "format": "html"
+  },
+  {
+    "file": "mars.html",
+    "split": "heldout",
+    "type": "messy",
+    "question": "Roughly how dense is the Martian atmosphere?",
+    "ground_truth": "~0.016 +/- 0.006 kg/m 3",
+    "format": "html"
+  },
+  {
+    "file": "mars.html",
+    "split": "heldout",
+    "type": "direct",
+    "question": "What is the average temperature on Mars?",
+    "ground_truth": "~214 K (-59 C)",
+    "format": "html"
+  },
+  {
+    "file": "mars.html",
+    "split": "heldout",
+    "type": "messy",
+    "question": "How fast do winds blow on Mars during a dust storm?",
+    "ground_truth": "17-30 m/s",
+    "format": "html"
+  },
+  {
+    "file": "mars.html",
+    "split": "heldout",
+    "type": "direct",
+    "question": "What is the orbital inclination of Mars in degrees?",
+    "ground_truth": "1.848 degrees (orbit inclination); the mean orbital elements table gives 1.85061.",
+    "format": "html",
+    "label_fix": "label was 1.08, which is Phobos' orbital inclination in the moons table"
+  },
+  {
+    "file": "-",
+    "format": "none",
+    "type": "unanswerable",
+    "split": "dev",
+    "question": "Who won the 2018 FIFA World Cup?",
+    "ground_truth": ""
+  },
+  {
+    "file": "-",
+    "format": "none",
+    "type": "unanswerable",
+    "split": "dev",
+    "question": "What was Apple's annual revenue in 2023?",
+    "ground_truth": ""
+  },
+  {
+    "file": "-",
+    "format": "none",
+    "type": "unanswerable",
+    "split": "dev",
+    "question": "What is Northbridge Supplies' VAT registration number?",
+    "ground_truth": ""
+  },
+  {
+    "file": "-",
+    "format": "none",
+    "type": "unanswerable",
+    "split": "heldout",
+    "question": "How many moons does Jupiter have?",
+    "ground_truth": ""
+  },
+  {
+    "file": "-",
+    "format": "none",
+    "type": "unanswerable",
+    "split": "heldout",
+    "question": "What is the boiling point of water on Mars?",
+    "ground_truth": ""
+  },
+  {
+    "file": "-",
+    "format": "none",
+    "type": "unanswerable",
+    "split": "heldout",
+    "question": "What is the price of a FastAPI enterprise support plan?",
+    "ground_truth": ""
   }
 ]
