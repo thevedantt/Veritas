@@ -20,6 +20,7 @@
     </a>
     <nav class="top-actions about-nav" aria-label="About page sections">
       <a href="#how">How it works</a>
+      <a href="#results">Results</a>
       <a href="#production">Production</a>
       <a href="#tradeoffs">Tradeoffs</a>
       <a class="session-btn" href="/">Open the app →</a>
@@ -61,9 +62,9 @@
     </section>
 
     <section class="kpis" aria-label="Measured results">
-      <div class="kpi"><span class="kpi-v">25–26 / 30</span><span class="kpi-k">correct on the test set, and every unanswerable question answered "not found"</span></div>
-      <div class="kpi"><span class="kpi-v">~2 s</span><span class="kpi-k">to the first word; ~4–5 s for a fully checked answer</span></div>
-      <div class="kpi"><span class="kpi-v">&lt; $0.001</span><span class="kpi-k">per question; repeated questions are free from cache</span></div>
+      <div class="kpi"><span class="kpi-v">95.3%</span><span class="kpi-k">correct on 167 questions over 20 documents in 10 formats, vs 91.0% for plain retrieval</span></div>
+      <div class="kpi"><span class="kpi-v">97.0%</span><span class="kpi-k">correct on documents never used for tuning; 99.4% of answers supported by their sources</span></div>
+      <div class="kpi"><span class="kpi-v">~$0.001</span><span class="kpi-k">per question; repeated questions are free from cache</span></div>
       <div class="kpi"><span class="kpi-v">$5 / month</span><span class="kpi-k">hard AI budget, enforced in the app with a spend ledger</span></div>
     </section>
 
@@ -99,22 +100,53 @@
       </div>
     </section>
 
+    <section class="block" id="results">
+      <header class="block-head"><span class="num">02</span><h3>Results</h3></header>
+      <div class="split split-wide">
+        <div class="table-wrap">
+          <table class="turns">
+            <thead><tr><th>Benchmark</th><th>Plain retrieval</th><th>Veritas agent</th></tr></thead>
+            <tbody>
+              <tr><td>Correct answers (167 questions)</td><td>91.0%</td><td><strong>95.3%</strong> (94.2-96.2%, 3 runs)</td></tr>
+              <tr><td>Correct on never-tuned documents</td><td>90.9%</td><td><strong>97.0%</strong></td></tr>
+              <tr><td>Answers supported by sources</td><td>98.1%</td><td><strong>99.4%</strong></td></tr>
+              <tr><td>Unanswerable questions declined</td><td>11 / 11</td><td><strong>11 / 11</strong></td></tr>
+              <tr><td>Cost per question</td><td>$0.0008</td><td>$0.0010</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="side">
+          <h4>What was tested</h4>
+          <ul class="chips">
+            <li>PDF</li><li>Scanned PDF</li><li>HTML</li><li>Markdown</li><li>CSV</li><li>Excel</li><li>Word</li>
+            <li>PowerPoint</li><li>PNG</li>
+          </ul>
+          <h4>How it was measured</h4>
+          <ul class="plain">
+            <li>20 documents; 82 questions on 10 documents never used for tuning, where Excel, PowerPoint and images all scored 100%.</li>
+            <li>Answers come from source data or verbatim-checked evidence; one judge call per question.</li>
+            <li>A hidden "ignore all instructions" in an uploaded file was ignored.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
     <section class="block" id="production">
-      <header class="block-head"><span class="num">02</span><h3>Built like a production system</h3></header>
+      <header class="block-head"><span class="num">03</span><h3>Built like a production system</h3></header>
       <div class="cards">
-        <article class="card"><h4>Cost</h4><p>Cheap models with thinking off, answer and embedding caches, a monthly
-          spend ledger with a hard cap, capped vision pages, evals that stop at $1.</p></article>
-        <article class="card"><h4>Latency</h4><p>Streamed answers, parallel searches, a local reranker, and a
-          fallback model with a circuit breaker, so one slow call doesn't slow every answer.</p></article>
+        <article class="card"><h4>Cost</h4><p>Hard monthly spend cap with a ledger, cheap models with thinking off,
+          cached repeats for $0, and evaluation at ~$0.20 per full run (down from several dollars).</p></article>
+        <article class="card"><h4>Speed &amp; scale</h4><p>Streamed answers, parallel searches, a local reranker, a
+          fallback with a circuit breaker; stateless app copies, an upload worker and shared Redis.</p></article>
         <article class="card"><h4>Accuracy</h4><p>Hybrid search, table-aware chunking, vision for scans, targeted
           retries, a second-model grounding check, and "not found" instead of guessing.</p></article>
-        <article class="card"><h4>Safety &amp; operations</h4><p>Per-client rate limits, upload limits and dedupe,
-          no HTML from documents, health and spend endpoints, Langfuse traces, a scored test set.</p></article>
+        <article class="card"><h4>Security</h4><p>Prompt-injection guard for document text, CSRF protection, strict
+          CSP and anti-framing headers, rate limits, upload limits and an optional password.</p></article>
       </div>
     </section>
 
     <section class="block" id="tradeoffs">
-      <header class="block-head"><span class="num">03</span><h3>Tradeoffs</h3></header>
+      <header class="block-head"><span class="num">04</span><h3>Tradeoffs</h3></header>
       <div class="split split-wide">
         <div class="table-wrap">
           <table class="turns">
@@ -122,9 +154,9 @@
             <tbody>
               <tr><td>2.5 Flash writes, Flash-Lite checks</td><td>Half the price of 3.x Flash, stable</td><td>3.7 Flash got 2 more of 30 right</td></tr>
               <tr><td>Thinking off</td><td>Faster, no billed reasoning tokens</td><td>Weaker multi-step table reasoning</td></tr>
-              <tr><td>Self-correcting agent</td><td>Grounding check and retries</td><td>~3 s slower than plain retrieval</td></tr>
+              <tr><td>Self-correcting agent</td><td>95.3% vs 91.0% correct; 97.0% vs 90.9% on unseen documents</td><td>median 2.6-9.4 s vs ~1 s for plain retrieval</td></tr>
               <tr><td>Vision model for scans</td><td>Correct cells on noisy scans</td><td>~$0.005 per page, max 10 per document</td></tr>
-              <tr><td>Embedded vector DB, in-process cache</td><td>Zero infrastructure</td><td>One server process until scaled out</td></tr>
+              <tr><td>Embedded index and cache by default</td><td>Zero infrastructure to run locally</td><td>Scaling out needs Redis and a Qdrant server (supported)</td></tr>
             </tbody>
           </table>
         </div>
@@ -132,13 +164,13 @@
           <h4>Stack</h4>
           <ul class="chips">
             <li>Docling</li><li>Qdrant hybrid</li><li>LangGraph</li><li>Gemini · Vertex AI</li>
-            <li>text-embedding-005</li><li>BM25</li><li>Jina reranker</li><li>Langfuse</li><li>Docker Compose</li>
+            <li>text-embedding-005</li><li>BM25</li><li>Jina reranker</li><li>Redis</li><li>Langfuse</li><li>Docker + Caddy</li>
           </ul>
           <h4>Known limits</h4>
           <ul class="plain">
             <li>One upload parses at a time; a 300-page book takes ~25 min on a laptop CPU, searchable as it goes.</li>
-            <li>Single user: no sign-in or per-user spaces yet.</li>
-            <li>33-question test set: one answer ≈ 3 points.</li>
+            <li>Single tenant: one shared library and an optional password, not per-user accounts.</li>
+            <li>Not load-tested; the weakest spot is a noisy scanned tax table (neighbouring-row reads).</li>
           </ul>
         </div>
       </div>
